@@ -1,0 +1,110 @@
+
+esp_err_t sdi12_master_send_command____(sdi12_master_handle_t handle, const char* command, const char **const response) {
+    /* validate arguments */
+    ESP_ARG_CHECK( handle && command );
+
+    /* validate command size */
+    ESP_RETURN_ON_FALSE((strnlen(command, SDI12_MASTER_COMMAND_MAX_SIZE) < SDI12_MASTER_COMMAND_MAX_SIZE), ESP_ERR_INVALID_SIZE, TAG, "command length cannot exceed %u characters, send command failed", SDI12_MASTER_COMMAND_MAX_SIZE);
+
+    /* attempt to initialize gpio pins and levels for ltc2873 */
+    ESP_RETURN_ON_ERROR( sdi12_master_gpio_init(handle), TAG, "unable to setup gpio pins, init failed");
+
+    /* send break */
+    ESP_RETURN_ON_ERROR(sdi12_master_break(handle), TAG, "unable to send break, send command failed");
+
+    /* send mark */
+    ESP_RETURN_ON_ERROR(sdi12_master_mark(handle), TAG, "unable to send master mark, send command failed");
+
+    /* enable uart */
+    if(uart_is_driver_installed(handle->dev_config.uart_port) == false) {
+        ESP_RETURN_ON_ERROR(sdi12_master_uart_enable(handle), TAG, "unable to enable uart, send command failed");
+    }
+
+    /* send command */
+    for(int i = 0; i < strnlen(command, SDI12_MASTER_COMMAND_MAX_SIZE); i++) {
+        uart_write_bytes(handle->dev_config.uart_port, &command[i], 1);
+    }
+
+    // command transaction delay (byte time * command length)
+    sdi12_master_delay( (SDI12_MASTER_MARK_US * strnlen(command, SDI12_MASTER_COMMAND_MAX_SIZE)) );
+
+    // set de and re direction to read
+    ESP_RETURN_ON_ERROR( gpio_set_level(handle->dev_config.dc2364a_de_io_num, 0), TAG, "unable to set de gpio level, send command failed" );
+    ESP_RETURN_ON_ERROR( gpio_set_level(handle->dev_config.dc2364a_re_io_num, 0), TAG, "unable to set re gpio level, send command failed" );
+
+    // init end time and flags, sensor must respond within 15-ms (i.e. first char to be received)
+    int64_t end_time      = esp_timer_get_time() + (int64_t)SDI12_MASTER_MAX_RESPONSE_TIME_US + 15000;
+    size_t  rx_buffer_len = 0; 
+    bool    end_command   = false;
+
+    // poll for sensor response from command otherwise a timeout will be raised
+    while ((end_command == false) && (esp_timer_get_time() < end_time)) {
+        if(uart_get_buffered_data_len(handle->dev_config.uart_port, &rx_buffer_len) != ESP_OK) {
+            ESP_LOGI(TAG, "error");
+        }
+        if(rx_buffer_len > 1) end_command = true; // wait till first character, or more, is received
+        vTaskDelay(pdMS_TO_TICKS(1));
+        ESP_LOGI(TAG, "poll");
+    }
+
+    if(end_command == false) {
+        /* disable uart */
+        ESP_RETURN_ON_ERROR(sdi12_master_uart_disable(handle), TAG, "unable to disable uart, send command failed");
+    }
+
+    // validate sensor responded within the max response time
+    ESP_RETURN_ON_FALSE(end_command, ESP_ERR_INVALID_RESPONSE, TAG, "no response from sensor, send command failed");
+
+    // reset end command flag
+    end_command = false;
+
+    // get response size in bytes from uart
+    ESP_RETURN_ON_ERROR( uart_get_buffered_data_len(handle->dev_config.uart_port, &rx_buffer_len), TAG, "unable to get response size from uart, send command failed" );
+
+    // validate response size
+    ESP_RETURN_ON_FALSE(rx_buffer_len < SDI12_MASTER_RESPONSE_MAX_SIZE, ESP_ERR_INVALID_SIZE, TAG, "response from sensor exceeds data buffer size, send command failed");
+
+    // configure temporary buffers for the output response and incoming data from uart
+    const char* out_response = (char *)calloc(rx_buffer_len, sizeof(char));
+    const uint8_t* rx_buffer = (uint8_t *)calloc(rx_buffer_len, sizeof(uint8_t));
+
+    // reset end time, sensor must complete the transmission within 810-ms (total response time)
+    end_time = esp_timer_get_time() + (int64_t)SDI12_MASTER_MAX_TOTAL_RESPONSE_TIME_US;
+
+    // poll for sensor response otherwise a timeout will be raised
+    while (!end_command && (esp_timer_get_time() < end_time)) {
+        //
+        // iterate one byte at a time to remove <CR><LF>
+        //
+        int rx_read_len = rx_buffer_len;
+        do {
+            // read uart bytes and concat response string
+            rx_read_len = uart_read_bytes(handle->dev_config.uart_port, &rx_buffer, rx_read_len, 20 / portTICK_PERIOD_MS);
+            for(int i = 0; i < rx_read_len; i++) {
+                char c = (char)rx_buffer[i];
+                // concat response without <CR><LF>
+                if(c != '\n' || c != '\r') {
+                    out_response += c;
+                }
+                // validate end of response
+                if(c == '\r') {
+                    end_command = true;
+                }
+            }
+        } while (rx_read_len == 0);
+    }
+
+    /* disable uart */
+    ESP_RETURN_ON_ERROR(sdi12_master_uart_disable(handle), TAG, "unable to disable uart, send command failed");
+
+    // validate sensor responded within the max total response time
+    ESP_RETURN_ON_FALSE(end_command, ESP_ERR_TIMEOUT, TAG, "response timed out, send command failed");
+
+    // delay a little before next command
+    vTaskDelay(pdMS_TO_TICKS(SDI12_MASTER_DELAY_AFTER_TRANSMIT_US / 1000));
+
+    /* set output parameters */
+    *response = out_response;
+    
+    return ESP_OK;
+}

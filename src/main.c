@@ -86,7 +86,7 @@ static void i2c_0_task( void *pvParameters ) {
             ESP_LOGE(APP_TAG, "sdi12_master_send_command failed (%s)", esp_err_to_name(result));
         } else {
             for(int i = 0; i < size; i++) {
-                ESP_LOGW(APP_TAG, "sdi-12 sensor response values: %f", values[i]);
+                ESP_LOGW(APP_TAG, "sdi-12 sensor response value: %f", values[i]);
             }
         }
         //

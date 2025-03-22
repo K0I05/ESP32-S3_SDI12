@@ -16,9 +16,9 @@ The SDI-12 electrical interface consist of a bus to power and transmit serial da
 
 ## ESP32-S3 SDI-12 Electrical Interface
 
-There are basic SDI-12 circuit examples provided in the published SDI-12 protocol standard.  However, for greater flexibility and versatility, the LTC2873 single-bus RS-485/RS-232 multiprotocol transceiver with switchable termination by Analog Devices was utilized and evaluated with the Analog Devices DC2364A development board.  The LTC2873 is user configurable through GPIO pins for hardware interfacing with the microcontroller and can be programmed for RS-485 with full or half-duplex, RS-422, RS-232, and SDI-12 communication protocols.  The LTC2873 supports tri-state conditions through the receiver enable (RE) and driver enable (DE) pins making it suitable for SDI-12 communication protocol.
+There are basic SDI-12 circuit examples provided in the published SDI-12 protocol standard.  However, for greater flexibility and versatility, the LTC2873 (<https://www.analog.com/en/products/ltc2873.html>) single-bus RS-485/RS-232 multiprotocol transceiver with switchable termination by Analog Devices was utilized and evaluated with the Analog Devices DC2364A evaluation board (<https://www.analog.com/en/resources/evaluation-hardware-and-software/evaluation-boards-kits/dc2364a.html#eb-overview>).  The LTC2873 is user configurable through GPIO pins for hardware interfacing with the microcontroller and can be programmed for RS-485 with full or half-duplex, RS-422, RS-232, and SDI-12 communication protocols.  The LTC2873 supports tri-state conditions through the receiver enable (RE) and driver enable (DE) pins making it suitable for SDI-12 communication protocol.
 
-![LTC2873 Block Diagram](images/LTC2873_Block_Diagram.png)
+![LTC2873 Block Diagram](images/ltc2873-acl.png)
 
 When an SDI-12 command is issued, the microcontroller toggles the RE and DE pins to a logic high and the TX pin to a logic low for the start of transmission break sequence. After the break sequence period (~12.5ms), the microcontroller toggles the TX pin to a logic high for the mark sequence period (~8.3ms), the SDI-12 command characters are transmitted to the device, and then the microcontroller toggles the RE and DE pins to a logic low to while it waits to receive a response from the device.  There is a total of 7 GPIO pins needed to for microcontroller hardware interacing which are outlined below.
 
@@ -34,13 +34,13 @@ When an SDI-12 command is issued, the microcontroller toggles the RE and DE pins
 #define SDI12_MASTER_MODE_IO_NUM                    (GPIO_NUM_21) /*!< logic low for rs-232 and high for rs-485 */
 ```
 
-If you have a logic analyzer, be sure to inverse the signals when sniffing the serial lines, otherwise the information will look like garbage.  To interface the SDI-12 device, the B/RI terminal is used on the DC2364A development board, and ensure that the SDI-12 device is properly grounded with the DC2364A development board.  Otherwise, you may experience unexpected behaviour and erroneous results.
+If you have a logic analyzer, be sure to inverse the signals when sniffing the serial lines, otherwise the information will look like garbage.  To interface the SDI-12 device, the B/RI terminal is used on the DC2364A evaluation board, and ensure that the SDI-12 device is properly grounded with the DC2364A evaluation board.  Otherwise, you may experience unexpected behaviour and erroneous results.
 
 ![Logic Analyzer Capture](images/logic_analyzer_capture_cmd.png)
 
 ## SDI-12 Prototyping & Controls
 
-A Campbell Scientific CR6 data-logger was programmed to emulate an SDI-12 sensor but I do have a multi-parameter SDI-12 meteorological sensor as a backup. For prototyping purposes, the CR6 is more than suitable to act as an SDI-12 control device, and programming implementation with the ESP32-S3 was troubleshooted with a Kingst Logic Analizer (LA1010). The ESP32-S3 board is interfaced to a breakout board with screw terminals for easy wiring to the Analog Devices DC2364A development board.
+A Campbell Scientific CR6 (<https://www.campbellsci.ca/cr6>) data-logger was programmed to emulate an SDI-12 sensor but I do have a multi-parameter SDI-12 meteorological sensor as a backup. For prototyping purposes, the CR6 is more than suitable to act as an SDI-12 control device, and programming implementation with the ESP32-S3 was troubleshooted with a Kingst LA1010 Logic Analizer. The ESP32-S3 board is interfaced to a breakout board with screw terminals for easy wiring to the Analog Devices DC2364A evaluation board.
 
 ![Logic Analyzer Capture](images/logic_analyzer_capture.png)
 
@@ -52,11 +52,29 @@ Key features implemented to date include:
 
 - **Ackowledge Active:** ackowledges if the SDI-12 device is active.
 - **Send Identification:** retreives identification details from SDI-12 device.
+
+```text
+W (36905) SDI-12 [APP]: sdi-12 version:        1.4
+W (36905) SDI-12 [APP]: vendor identification: Campbell
+W (36905) SDI-12 [APP]: sensor model:          CR6  
+W (36915) SDI-12 [APP]: sensor version:         01
+W (36915) SDI-12 [APP]: sensor information:    4Std.14.01
+```
+
 - **Change Address:** changes the device's SDI-12 address.
 - **Address Query:** checks if the SDI-12 device address being queried is on the SDI-12 bus.
 - **Recorder:** issues a start measurement command (aM!) and retreives measurement values from the SDI-12 device.
 
-There is always room for improvement to optimize the code base and open to suggestions.
+```text
+W (35775) SDI-12 [APP]: sdi-12 sensor response value: 3.335000
+W (35775) SDI-12 [APP]: sdi-12 sensor response value: 23.649200
+W (35775) SDI-12 [APP]: sdi-12 sensor response value: -2.680000
+W (35785) SDI-12 [APP]: sdi-12 sensor response value: 23.649290
+W (35795) SDI-12 [APP]: sdi-12 sensor response value: -2.680000
+W (35795) SDI-12 [APP]: sdi-12 sensor response value: 23.649290
+```
+
+There is always room for improvement to optimize the code base and open to suggestions.  As an example, to free up the microcontrollers UART TX line, the code enables and disables the UART everytime a command is executed.
 
 ## References
 
