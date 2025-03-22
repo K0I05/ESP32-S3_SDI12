@@ -17,4 +17,4 @@ Additional information on SDI-12 is available here:
 - <https://www.sdi-12.org/>
 - <https://en.wikipedia.org/wiki/SDI-12>
 
-Copyright (c) 2024 Eric Gionet (<gionet.c.eric@gmail.com>)
+Copyright (c) 2025 Eric Gionet (<gionet.c.eric@gmail.com>)
