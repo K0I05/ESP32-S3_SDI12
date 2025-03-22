@@ -193,7 +193,6 @@ typedef enum sdi12_master_measurement_commands_e {
     SDI12_MASTER_CC7_COMMAND,
     SDI12_MASTER_CC8_COMMAND,
     SDI12_MASTER_CC9_COMMAND,
-    /*
     SDI12_MASTER_R0_COMMAND,
     SDI12_MASTER_R1_COMMAND,
     SDI12_MASTER_R2_COMMAND,
@@ -203,7 +202,6 @@ typedef enum sdi12_master_measurement_commands_e {
     SDI12_MASTER_R6_COMMAND,
     SDI12_MASTER_R7_COMMAND,
     SDI12_MASTER_R8_COMMAND,
-    SDI12_MASTER_R9_COMMAND,
     SDI12_MASTER_R9_COMMAND,
     SDI12_MASTER_RC0_COMMAND,
     SDI12_MASTER_RC1_COMMAND,
@@ -215,7 +213,6 @@ typedef enum sdi12_master_measurement_commands_e {
     SDI12_MASTER_RC7_COMMAND,
     SDI12_MASTER_RC8_COMMAND,
     SDI12_MASTER_RC9_COMMAND
-    */
 } sdi12_master_measurement_commands_t;
 
 /**
@@ -235,23 +232,36 @@ typedef enum sdi12_master_send_data_commands_e {
 } sdi12_master_send_data_commands_t;
 
 /**
+ * @brief SDI-12 master measurement modes enumerator.
+ */
+typedef enum sdi12_master_measurement_modes_e {
+    SDI12_MASTER_MODE_QUEUED,          /*<! queued measurements */
+    SDI12_MASTER_MODE_QUEUED_CRC,      /*<! queued measurements and request crc */
+    SDI12_MASTER_MODE_CONCURRENT,      /*<! concurrent measurements */
+    SDI12_MASTER_MODE_CONCURRENT_CRC,  /*<! concurrent measurements and request crc */
+    SDI12_MASTER_MODE_CONTINUOUS,      /*<! continuous measurements */
+    SDI12_MASTER_MODE_CONTINUOUS_CRC,  /*<! continuous measurements and request crc */
+    SDI12_MASTER_MODE_VERIFICATION     /*<! verification */
+} sdi12_master_measurement_modes_t;
+
+/**
  * @brief SDI-12 master send identification (i.e. format allccccccccmmmmmmvvvxxx...xx / 13 NRSYSINC 100000 1.2 101) structure.
  */
-typedef struct sdi12_master_send_identification_s {
+typedef struct sdi12_master_sensor_identification_s {
     char sdi12_version[4];            /*!< sdi-12 version number, version 1.4 is encoded as 14 */
     char vendor_identification[9];    /*!< 8-char vendor identification */
     char sensor_model[7];             /*!< 6-char sensor model number */
     char sensor_version[4];           /*!< 3-char sensor version number */
     char sensor_information[14];      /*!< 13-char sensor information i.e. serial number, other */
-} sdi12_master_send_identification_t;
+} sdi12_master_sensor_identification_t;
 
 /**
- * @brief SDI-12 master start measurement structure.
+ * @brief SDI-12 master measurement queue structure.
  */
 typedef struct {
     uint8_t data_ready_delay;  /*!< time in seconds before the measurement is ready */
     uint8_t number_of_values;  /*!< number of measurement values the sensor will make and return (1 to 9) */
-} sdi12_master_start_measurement_t;
+} sdi12_master_measurement_queue_t;
 
 /**
  * @brief SDI-12 master configuration structure.
@@ -363,7 +373,7 @@ esp_err_t sdi12_master_acknowledge_active(sdi12_master_handle_t handle, const ch
  * @param[out] identification SDI-12 sensor identification structure.
  * @return esp_err_t ESP_OK on success, ESP_ERR_INVALID_ARG if handle is NULL.
  */
-esp_err_t sdi12_master_send_identification(sdi12_master_handle_t handle, const char address, sdi12_master_send_identification_t *const identification);
+esp_err_t sdi12_master_send_identification(sdi12_master_handle_t handle, const char address, sdi12_master_sensor_identification_t *const identification);
 
 /**
  * @brief Sends a change address command to the SDI-12 sensor.
@@ -389,10 +399,10 @@ esp_err_t sdi12_master_address_query(sdi12_master_handle_t handle, char *const a
  * 
  * @param handle SDI-12 master handle.
  * @param[in] address SDI-12 sensor address.
- * @param[out] measurement SDI-12 sensor measurement structure (data ready delay and number of values).
+ * @param[out] queue SDI-12 sensor measurement queuing structure (data ready delay and number of values).
  * @return esp_err_t ESP_OK on success, ESP_ERR_INVALID_ARG if handle is NULL.
  */
-esp_err_t sdi12_master_start_measurement(sdi12_master_handle_t handle, const char address, sdi12_master_start_measurement_t *const measurement);
+esp_err_t sdi12_master_start_measurement(sdi12_master_handle_t handle, const char address, sdi12_master_measurement_queue_t *const queue);
 
 /**
  * @brief Aborts a previously issued start measurement command from the SDI-12 sensor.

@@ -365,47 +365,39 @@ static inline const char* sdi12_master_send_data_command_string(const char addre
             return cmd;
         default:
             return NULL;
-    }
-}
-
-/*
-static inline bool sdi12_master_is_continuous(const sdi12_master_measurement_commands_t command) {
-    switch(command) {
-        case SDI12_MASTER_R0_COMMAND:
-        case SDI12_MASTER_R1_COMMAND:
-        case SDI12_MASTER_R2_COMMAND:
-        case SDI12_MASTER_R3_COMMAND:
-        case SDI12_MASTER_R4_COMMAND:
-        case SDI12_MASTER_R5_COMMAND:
-        case SDI12_MASTER_R6_COMMAND:
-        case SDI12_MASTER_R7_COMMAND:
-        case SDI12_MASTER_R8_COMMAND:
-        case SDI12_MASTER_R9_COMMAND:
-        case SDI12_MASTER_RC0_COMMAND:
-        case SDI12_MASTER_RC1_COMMAND:
-        case SDI12_MASTER_RC2_COMMAND:
-        case SDI12_MASTER_RC3_COMMAND:
-        case SDI12_MASTER_RC4_COMMAND:
-        case SDI12_MASTER_RC5_COMMAND:
-        case SDI12_MASTER_RC6_COMMAND:
-        case SDI12_MASTER_RC7_COMMAND:
-        case SDI12_MASTER_RC8_COMMAND:
-        case SDI12_MASTER_RC9_COMMAND:
-            return true;
-        default:
-            return false;
     };
 }
-*/
 
 /**
- * @brief Checks if the measurement command is concurrent.
+ * @brief Determines the SDI-12 measurement mode from the measurement command.
  * 
- * @param command SDI-12 measurement command to validate.
- * @return true when measurement command is concurrent, otherwise, false.
+ * @param command SDI-12 measurement command.
+ * @return sdi12_master_measurement_modes_t SDI-12 measurement start mode.
  */
-static inline bool sdi12_master_is_concurrent(const sdi12_master_measurement_commands_t command) {
+static inline sdi12_master_measurement_modes_t sdi12_master_measurement_mode(const sdi12_master_measurement_commands_t command) {
     switch(command) {
+        case SDI12_MASTER_M_COMMAND:
+        case SDI12_MASTER_M1_COMMAND:
+        case SDI12_MASTER_M2_COMMAND:
+        case SDI12_MASTER_M3_COMMAND:
+        case SDI12_MASTER_M4_COMMAND:
+        case SDI12_MASTER_M5_COMMAND:
+        case SDI12_MASTER_M6_COMMAND:
+        case SDI12_MASTER_M7_COMMAND:
+        case SDI12_MASTER_M8_COMMAND:
+        case SDI12_MASTER_M9_COMMAND:
+            return SDI12_MASTER_MODE_QUEUED;
+        case SDI12_MASTER_MC_COMMAND:
+        case SDI12_MASTER_MC1_COMMAND:
+        case SDI12_MASTER_MC2_COMMAND:
+        case SDI12_MASTER_MC3_COMMAND:
+        case SDI12_MASTER_MC4_COMMAND:
+        case SDI12_MASTER_MC5_COMMAND:
+        case SDI12_MASTER_MC6_COMMAND:
+        case SDI12_MASTER_MC7_COMMAND:
+        case SDI12_MASTER_MC8_COMMAND:
+        case SDI12_MASTER_MC9_COMMAND:
+            return SDI12_MASTER_MODE_QUEUED_CRC;
         case SDI12_MASTER_C_COMMAND:
         case SDI12_MASTER_C1_COMMAND:
         case SDI12_MASTER_C2_COMMAND:
@@ -416,6 +408,7 @@ static inline bool sdi12_master_is_concurrent(const sdi12_master_measurement_com
         case SDI12_MASTER_C7_COMMAND:
         case SDI12_MASTER_C8_COMMAND:
         case SDI12_MASTER_C9_COMMAND:
+            return SDI12_MASTER_MODE_CONCURRENT;
         case SDI12_MASTER_CC_COMMAND:
         case SDI12_MASTER_CC1_COMMAND:
         case SDI12_MASTER_CC2_COMMAND:
@@ -426,26 +419,59 @@ static inline bool sdi12_master_is_concurrent(const sdi12_master_measurement_com
         case SDI12_MASTER_CC7_COMMAND:
         case SDI12_MASTER_CC8_COMMAND:
         case SDI12_MASTER_CC9_COMMAND:
-            return true;
+            return SDI12_MASTER_MODE_CONCURRENT_CRC;
+        case SDI12_MASTER_R0_COMMAND:
+        case SDI12_MASTER_R1_COMMAND:
+        case SDI12_MASTER_R2_COMMAND:
+        case SDI12_MASTER_R3_COMMAND:
+        case SDI12_MASTER_R4_COMMAND:
+        case SDI12_MASTER_R5_COMMAND:
+        case SDI12_MASTER_R6_COMMAND:
+        case SDI12_MASTER_R7_COMMAND:
+        case SDI12_MASTER_R8_COMMAND:
+        case SDI12_MASTER_R9_COMMAND:
+            return SDI12_MASTER_MODE_CONTINUOUS;
+        case SDI12_MASTER_RC0_COMMAND:
+        case SDI12_MASTER_RC1_COMMAND:
+        case SDI12_MASTER_RC2_COMMAND:
+        case SDI12_MASTER_RC3_COMMAND:
+        case SDI12_MASTER_RC4_COMMAND:
+        case SDI12_MASTER_RC5_COMMAND:
+        case SDI12_MASTER_RC6_COMMAND:
+        case SDI12_MASTER_RC7_COMMAND:
+        case SDI12_MASTER_RC8_COMMAND:
+        case SDI12_MASTER_RC9_COMMAND:
+            return SDI12_MASTER_MODE_CONTINUOUS_CRC;
         default:
-            return false;
+            return SDI12_MASTER_MODE_QUEUED;
     };
 }
 
 /**
- * @brief Sends a start measurement or start concurent measurement command to the SDI-12 sensor and parses the response.
+ * @brief Sends a measurement queuing command to the SDI-12 sensor and parses the response.
+ * Continuous measurement commands are not supported or handled by this function.
  * 
  * @param[in] handle SDI-12 master handle.
  * @param[in] address SDI-12 sensor address.
  * @param[in] command SDI-12 measurement command to send and process.
- * @param[out] measurement SDI-12 start measurement or start concurent measurement structure (data ready delay and number of values).
+ * @param[out] queue SDI-12 measurement queuing structure (data ready delay and number of values).
  * @return esp_err_t ESP_OK on success, ESP_ERR_INVALID_ARG if handle is NULL.
  */
-static inline esp_err_t sdi12_master_measurement(sdi12_master_handle_t handle, const char address, const sdi12_master_measurement_commands_t command, sdi12_master_start_measurement_t *const measurement) {
+static inline esp_err_t sdi12_master_measurement(sdi12_master_handle_t handle, const char address, const sdi12_master_measurement_commands_t command, sdi12_master_measurement_queue_t *const queue) {
+    sdi12_master_measurement_queue_t out_queue;
     const char* response;
 
     /* validate arguments */
     ESP_ARG_CHECK( handle );
+
+    /* determine measurement mode */
+    sdi12_master_measurement_modes_t mode = sdi12_master_measurement_mode(command);
+
+    /* validate measurement mode */
+    if(mode == SDI12_MASTER_MODE_CONTINUOUS || mode == SDI12_MASTER_MODE_CONTINUOUS_CRC) {
+        /* continuous and continuous crc are not supported or handled by this function */
+        return ESP_ERR_NOT_SUPPORTED;
+    }
 
     /* build measurement command */
     const char* cmd = sdi12_master_measurement_command_string(address, command);
@@ -459,42 +485,43 @@ static inline esp_err_t sdi12_master_measurement(sdi12_master_handle_t handle, c
     /* validate address */
     ESP_RETURN_ON_FALSE(((char)response[0] == address), ESP_ERR_INVALID_RESPONSE, TAG, "sdi-12 address is incorrect, start measurement command failed");
 
-    /* parse information */
-    sdi12_master_start_measurement_t out_meas;
-
-    /* validate if concurrent atttnn vs queued atttn */
-    if(sdi12_master_is_concurrent(command)) {
+    /* validate if concurrent atttnn vs queued atttn and parse response */
+    if(mode == SDI12_MASTER_MODE_CONCURRENT || mode == SDI12_MASTER_MODE_CONCURRENT_CRC) {
         const char delay[] = { (char)response[1], (char)response[2], (char)response[3], '\0' };
         const char vals[]  = { (char)response[4], (char)response[5], '\0' };
 
-        out_meas.data_ready_delay = (uint8_t)atoi(delay);
-        out_meas.number_of_values = (uint8_t)atoi(vals);
+        out_queue.data_ready_delay = (uint8_t)atoi(delay);
+        out_queue.number_of_values = (uint8_t)atoi(vals);
     } else {
         const char delay[] = { (char)response[1], (char)response[2], (char)response[3], '\0' };
         const char vals[]  = { (char)response[4], '\0' };
 
-        out_meas.data_ready_delay = (uint8_t)atoi(delay);
-        out_meas.number_of_values = (uint8_t)atoi(vals);
+        out_queue.data_ready_delay = (uint8_t)atoi(delay);
+        out_queue.number_of_values = (uint8_t)atoi(vals);
     }
 
     /* set output parameter */
-    *measurement = out_meas;
+    *queue = out_queue;
     
     return ESP_OK;
 }
 
 /**
- * @brief Parses an SDI-12 D0..D9 command response from device with <CR> and <LF> removed (i.e. 0+3.14+2.718+1.414).
+ * @brief Parses an SDI-12 D0..D9 command response from device with <CR> and <LF> characters removed (i.e. 0+3.14+2.718+1.414).
  * 
  * @param response SDI-12 D0..D9 command response from device to parse.
  * @param[out] values Parsed SDI-12 measurement values parsed from response.
  * @param[out] size Number of SDI-12 measurement values parsed from response.
+ * @return esp_err_t ESP_OK on success, ESP_ERR_INVALID_ARG if handle is NULL.
  */
-static inline void sdi12_master_parse_d_response(const char* response, float **const values, size_t *const size) {
+static inline esp_err_t sdi12_master_parse_d_response(const char* response, float **const values, size_t *const size) {
     uint8_t rsp_char_index = 0;
     uint8_t tok_count      = 0;
     uint8_t rsp_len        = strnlen(response, SDI12_MASTER_RESPONSE_MAX_SIZE);
     float*  out_values     = (float *)calloc(SDI12_MASTER_D_CMD_VALUES_MAX_SIZE, sizeof(float));
+
+    /* validate response size */
+    ESP_RETURN_ON_FALSE((strnlen(response, SDI12_MASTER_RESPONSE_MAX_SIZE) < SDI12_MASTER_RESPONSE_MAX_SIZE), ESP_ERR_INVALID_SIZE, TAG, "response length cannot exceed %u characters, parse d response failed", SDI12_MASTER_RESPONSE_MAX_SIZE);
 
     do {
         /* check for token delimiter in the response string */
@@ -520,8 +547,10 @@ static inline void sdi12_master_parse_d_response(const char* response, float **c
         rsp_char_index++;
     } while (rsp_char_index < rsp_len);
 
-    *size = tok_count;
+    *size   = tok_count;
     *values = out_values;
+
+    return ESP_OK;
 }
 
 esp_err_t sdi12_master_init(const sdi12_master_config_t *sdi12_master_config, sdi12_master_handle_t *sdi12_master_handle) {
@@ -630,22 +659,29 @@ esp_err_t sdi12_master_send_command(sdi12_master_handle_t handle, const char* co
 }
 
 esp_err_t sdi12_master_recorder(sdi12_master_handle_t handle, const char address, const sdi12_master_measurement_commands_t command, float **const values, size_t *const size) {
-    sdi12_master_start_measurement_t measurement;
-    uint8_t values_index = 0;
-    uint8_t values_counter = 0;
+    sdi12_master_measurement_queue_t queue;
+    uint8_t values_index    = 0;
+    uint8_t values_counter  = 0;
     uint8_t send_data_index = 0;
     
     /* validate arguments */
     ESP_ARG_CHECK( handle && values && size );
 
-    /* send start measurement command */
-    ESP_RETURN_ON_ERROR(sdi12_master_measurement(handle, address, command, &measurement), TAG, "");
+    /* 
+        handle measurement modes: queued, queued crc, concurrent, 
+        concurrent crc, continuous and continuous crc
 
-    /* delay before requesting values */
-    vTaskDelay(pdMS_TO_TICKS(measurement.data_ready_delay * 1000));
+        sdi12_master_measurement_modes_t
+    */
+
+    /* send measurement command */
+    ESP_RETURN_ON_ERROR(sdi12_master_measurement(handle, address, command, &queue), TAG, "measurement command unsuccessful, recorder failed");
+
+    /* delay before requesting measurement values */
+    vTaskDelay(pdMS_TO_TICKS(queue.data_ready_delay * 1000));
 
     /* instantiate output values based on expected number of values */
-    float* out_values = (float *)calloc(measurement.number_of_values, sizeof(float));
+    float* out_values = (float *)calloc(queue.number_of_values, sizeof(float));
 
     /* determine number of send data commands (D0..D9) required */
     do {
@@ -659,11 +695,11 @@ esp_err_t sdi12_master_recorder(sdi12_master_handle_t handle, const char address
         /* build send data command from command type */
         const char* send_data_cmd = sdi12_master_send_data_command_string(address, send_data);
 
-        /* send command to device and wait for response */
-        ESP_RETURN_ON_ERROR(sdi12_master_send_command(handle, send_data_cmd, &response), TAG, "");
+        /* send data command to device and wait for response */
+        ESP_RETURN_ON_ERROR(sdi12_master_send_command(handle, send_data_cmd, &response), TAG, "send data command unsuccessful, recorder failed");
 
         /* parse measurement values from response */
-        sdi12_master_parse_d_response(response, &vals, &vals_size);
+        ESP_RETURN_ON_ERROR(sdi12_master_parse_d_response(response, &vals, &vals_size), TAG, "parse d response unsuccessful, recorder failed");
 
         /* set output measurement values */
         for(uint8_t i = 0; i < vals_size; i++) {
@@ -673,11 +709,11 @@ esp_err_t sdi12_master_recorder(sdi12_master_handle_t handle, const char address
         /* increment measurement values counter */
         values_counter = values_counter + vals_size;
 
-    } while (values_counter < measurement.number_of_values);
+    } while (values_counter < queue.number_of_values);
 
     /* set output parameters */
     *values = out_values;
-    *size = measurement.number_of_values;
+    *size   = queue.number_of_values;
 
     return ESP_OK;
 }
@@ -709,7 +745,7 @@ esp_err_t sdi12_master_acknowledge_active(sdi12_master_handle_t handle, const ch
     return ESP_OK;
 }
 
-esp_err_t sdi12_master_send_identification(sdi12_master_handle_t handle, const char address, sdi12_master_send_identification_t *const identification) {
+esp_err_t sdi12_master_send_identification(sdi12_master_handle_t handle, const char address, sdi12_master_sensor_identification_t *const identification) {
     const char* response;
 
     /* validate arguments */
@@ -730,7 +766,7 @@ esp_err_t sdi12_master_send_identification(sdi12_master_handle_t handle, const c
     ESP_RETURN_ON_FALSE(((char)response[0] == address), ESP_ERR_INVALID_RESPONSE, TAG, "sdi-12 address is incorrect, send identification command failed");
 
     /* parse information */
-    sdi12_master_send_identification_t out_ident;
+    sdi12_master_sensor_identification_t out_ident;
     out_ident.sdi12_version[0]         = (char)response[1];
     out_ident.sdi12_version[1]         = '.';
     out_ident.sdi12_version[2]         = (char)response[2];
@@ -821,7 +857,7 @@ esp_err_t sdi12_master_address_query(sdi12_master_handle_t handle, char *const a
     return ESP_OK;
 }
 
-esp_err_t sdi12_master_start_measurement(sdi12_master_handle_t handle, const char address, sdi12_master_start_measurement_t *const measurement) {
+esp_err_t sdi12_master_start_measurement(sdi12_master_handle_t handle, const char address, sdi12_master_measurement_queue_t *const queue) {
     const char* response;
 
     /* validate arguments */
@@ -840,17 +876,16 @@ esp_err_t sdi12_master_start_measurement(sdi12_master_handle_t handle, const cha
     ESP_RETURN_ON_FALSE(((char)response[0] == address), ESP_ERR_INVALID_RESPONSE, TAG, "sdi-12 address is incorrect, start measurement command failed");
 
     /* parse information */
-    sdi12_master_start_measurement_t* out_meas = (sdi12_master_start_measurement_t *)calloc(1, sizeof(sdi12_master_start_measurement_t));
+    sdi12_master_measurement_queue_t out_queue;
 
     const char delay[] = { (char)response[1], (char)response[2], (char)response[3], '\0' };
     const char vals[]  = { (char)response[4], '\0' };
 
-    out_meas->data_ready_delay = (uint8_t)atoi(delay);
-    out_meas->number_of_values = (uint8_t)atoi(vals);
+    out_queue.data_ready_delay = (uint8_t)atoi(delay);
+    out_queue.number_of_values = (uint8_t)atoi(vals);
 
     /* set output parameter */
-    memcpy(measurement, out_meas, sizeof(sdi12_master_start_measurement_t));
-    free(out_meas);
+    *queue = out_queue;
 
     return ESP_OK;
 }

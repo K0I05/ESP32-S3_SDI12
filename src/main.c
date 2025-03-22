@@ -92,7 +92,7 @@ static void i2c_0_task( void *pvParameters ) {
         //
         vTaskDelay(pdMS_TO_TICKS(5000));
         //
-        sdi12_master_send_identification_t sdi12_identification;
+        sdi12_master_sensor_identification_t sdi12_identification;
         result = sdi12_master_send_identification(sdi12_master_hdl, '0', &sdi12_identification);
         if(result != ESP_OK) {
             ESP_LOGE(APP_TAG, "sdi12_master_send_identification failed (%s)", esp_err_to_name(result));
