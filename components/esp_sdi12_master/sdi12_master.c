@@ -683,7 +683,10 @@ esp_err_t sdi12_master_recorder(sdi12_master_handle_t handle, const char address
     /* instantiate output values based on expected number of values */
     float* out_values = (float *)calloc(queue.number_of_values, sizeof(float));
 
-    /* determine number of send data commands (D0..D9) required */
+    /* 
+        determine number of send data commands (D0..D9) required to 
+        collect all measurement values (i.e. queue.number_of_values)
+    */
     do {
         float* vals = NULL;
         size_t vals_size = 0;
@@ -692,13 +695,13 @@ esp_err_t sdi12_master_recorder(sdi12_master_handle_t handle, const char address
         /* retrieve send data command type from send data index (D0..D9) */
         sdi12_master_send_data_commands_t send_data = sdi12_master_send_data_commands[send_data_index++];
 
-        /* build send data command from command type */
+        /* build send data command from d command index (D0..D9) */
         const char* send_data_cmd = sdi12_master_send_data_command_string(address, send_data);
 
-        /* send data command to device and wait for response */
+        /* send data command and wait for d command response */
         ESP_RETURN_ON_ERROR(sdi12_master_send_command(handle, send_data_cmd, &response), TAG, "send data command unsuccessful, recorder failed");
 
-        /* parse measurement values from response */
+        /* parse measurement values from d command response */
         ESP_RETURN_ON_ERROR(sdi12_master_parse_d_response(response, &vals, &vals_size), TAG, "parse d response unsuccessful, recorder failed");
 
         /* set output measurement values */

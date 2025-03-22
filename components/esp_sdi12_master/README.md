@@ -34,15 +34,17 @@ When an SDI-12 command is issued, the microcontroller toggles the RE and DE pins
 #define SDI12_MASTER_MODE_IO_NUM                    (GPIO_NUM_21) /*!< logic low for rs-232 and high for rs-485 */
 ```
 
+![Logic Analyzer SDI-12 Command Capture](images/logic_analyzer_capture_cmd.png)
+
 If you have a logic analyzer, be sure to inverse the signals when sniffing the serial lines, otherwise the information will look like garbage.  To interface the SDI-12 device, the B/RI terminal is used on the DC2364A evaluation board, and ensure that the SDI-12 device is properly grounded to the DC2364A evaluation board.  Otherwise, you may experience unexpected behaviour and erroneous results.
 
-![Logic Analyzer Capture](images/logic_analyzer_capture_cmd.png)
+![Logic Analyzer SDI-12 Command & Response Capture](images/logic_analyzer_capture.png)
 
 ## SDI-12 Prototyping & Controls
 
 A Campbell Scientific CR6 (<https://www.campbellsci.ca/cr6>) data-logger was programmed to simulate an SDI-12 sensor but I do have a multi-parameter SDI-12 meteorological sensor as a backup. For prototyping purposes, the CR6 is more than suitable to act as an SDI-12 control device, and programming implementation with the ESP32-S3 was troubleshooted with a Kingst LA1010 Logic Analizer. The ESP32-S3 board is interfaced to a breakout board with screw terminals for easy wiring to the Analog Devices DC2364A evaluation board.
 
-![Logic Analyzer Capture](images/logic_analyzer_capture.png)
+![Prototyping Capture](images/IMG_2610.jpg)
 
 ## SDI-12 ESP-IDF Component Implementation
 
