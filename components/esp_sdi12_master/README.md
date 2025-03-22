@@ -18,7 +18,7 @@ The SDI-12 electrical interface consist of a bus to power and transmit serial da
 
 There are basic SDI-12 circuit examples provided in the published SDI-12 protocol standard.  However, for greater flexibility and versatility, the LTC2873 single-bus RS-485/RS-232 multiprotocol transceiver with switchable termination by Analog Devices was utilized and evaluated with the Analog Devices DC2364A development board.  The LTC2873 is user configurable through GPIO pins for hardware interfacing with the microcontroller and can be programmed for RS-485 with full or half-duplex, RS-422, RS-232, and SDI-12 communication protocols.  The LTC2873 supports tri-state conditions through the receiver enable (RE) and driver enable (DE) pins making it suitable for SDI-12 communication protocol.
 
-![LTC2873 Block Diagram](images/ltc2873_block_diagram.png)
+![LTC2873 Block Diagram](images/LTC2873_Block_Diagram.png)
 
 When an SDI-12 command is issued, the microcontroller toggles the RE and DE pins to a logic high and the TX pin to a logic low for the start of transmission break sequence. After the break sequence period (~12.5ms), the microcontroller toggles the TX pin to a logic high for the mark sequence period (~8.3ms), the SDI-12 command characters are transmitted to the device, and then the microcontroller toggles the RE and DE pins to a logic low to while it waits to receive a response from the device.  There is a total of 7 GPIO pins needed to for microcontroller hardware interacing which are outlined below.
 
