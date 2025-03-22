@@ -68,7 +68,7 @@ UART 2: 17 (Tx), 16 (Rx)
 #define SDI12_MASTER_MODE_IO_NUM                    (GPIO_NUM_21) /*!< logic low for rs-232 and high for rs-485 */
 
 #define SDI12_MASTER_UART_PORT_NUM                  (UART_NUM_2)
-#define SDI12_MASTER_UART_BAUD_RATE                 (9600)
+#define SDI12_MASTER_UART_BAUD_RATE                 (1200)
 #define SDI12_MASTER_TASK_STACK_SIZE                (1024)
 
 #define SDI12_MASTER_BREAK_US                       UINT32_C(12500)
@@ -136,7 +136,6 @@ UART 2: 17 (Tx), 16 (Rx)
 
 #define SDI12_MASTER_CONFIG_DEFAULT {                                           \
         .uart_port           = SDI12_MASTER_UART_PORT_NUM,                      \
-        .uart_baudrate       = 9600,                                            \
         .uart_tx_io_num      = SDI12_MASTER_TXD_IO_NUM,                         \
         .uart_rx_io_num      = SDI12_MASTER_RXD_IO_NUM,                         \
         .dc2364a_io_io_num   = SDI12_MASTER_IO_IO_NUM,                          \

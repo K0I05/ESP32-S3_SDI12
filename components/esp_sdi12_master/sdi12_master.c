@@ -185,7 +185,7 @@ static inline esp_err_t sdi12_master_uart_enable(sdi12_master_handle_t handle) {
 
     // sdi-12: init uart 1200bps, 7 bits, even parity, 1 stop bit
     uart_config_t uart_config = (uart_config_t) { 
-        .baud_rate  = 1200,
+        .baud_rate  = SDI12_MASTER_UART_BAUD_RATE,
         .data_bits  = UART_DATA_7_BITS,
         .parity     = UART_PARITY_EVEN,
         .stop_bits  = UART_STOP_BITS_1,
@@ -506,7 +506,7 @@ esp_err_t sdi12_master_send_command(sdi12_master_handle_t handle, const char* co
         //
         // iterate one byte at a time to remove <CR><LF>
         //
-        if(rx_read_len > 1) {
+        if(rx_read_len > 0) {
             uint8_t response_index = 0;
             for(uint8_t i = 0; i < rx_read_len; i++) {
                 char c = (char)rx_buffer[i];
@@ -566,27 +566,26 @@ static inline esp_err_t sdi12_master_measurement(sdi12_master_handle_t handle, c
     ESP_RETURN_ON_FALSE(((char)response[0] == address), ESP_ERR_INVALID_RESPONSE, TAG, "sdi-12 address is incorrect, start measurement command failed");
 
     /* parse information */
-    sdi12_master_start_measurement_t* out_meas = (sdi12_master_start_measurement_t *)calloc(1, sizeof(sdi12_master_start_measurement_t));
+    sdi12_master_start_measurement_t out_meas;
 
     /* validate if concurrent atttnn vs atttn*/
     if(sdi12_master_is_concurrent(command)) {
         const char delay[] = { (char)response[1], (char)response[2], (char)response[3], '\0' };
         const char vals[]  = { (char)response[4], (char)response[5], '\0' };
 
-        out_meas->data_ready_delay = (uint8_t)atoi(delay);
-        out_meas->number_of_values = (uint8_t)atoi(vals);
+        out_meas.data_ready_delay = (uint8_t)atoi(delay);
+        out_meas.number_of_values = (uint8_t)atoi(vals);
     } else {
         const char delay[] = { (char)response[1], (char)response[2], (char)response[3], '\0' };
         const char vals[]  = { (char)response[4], '\0' };
 
-        out_meas->data_ready_delay = (uint8_t)atoi(delay);
-        out_meas->number_of_values = (uint8_t)atoi(vals);
+        out_meas.data_ready_delay = (uint8_t)atoi(delay);
+        out_meas.number_of_values = (uint8_t)atoi(vals);
     }
 
     /* set output parameter */
-    memcpy(measurement, out_meas, sizeof(sdi12_master_start_measurement_t));
-    free(out_meas);
-
+    *measurement = out_meas;
+    
     return ESP_OK;
 }
 
@@ -616,7 +615,8 @@ static inline void sdi12_master_parse_d_response(const char* response, float **c
                 token[tok_char_index++] = response[rsp_char_index++];
                 /* check for next token delimiter in the response string */
                 if((rsp_char_index + 1) == rsp_len || response[rsp_char_index + 1] == '+' || response[rsp_char_index + 1] == '-') {
-                    /* parse token to a float data-type */
+                    /* if we landed here, the token was extracted from the response */
+                    /* string, parse token to a float data-type and exit this loop */
                     token[tok_char_index++] = '\0';
                     out_values[tok_count++] = (float)atof(token);
                     tok_end = true;
@@ -657,7 +657,7 @@ esp_err_t sdi12_master_recorder(sdi12_master_handle_t handle, const char address
         /* retrieve send data command type from send data index (D0..D9) */
         sdi12_master_send_data_commands_t send_data = sdi12_master_send_data_commands[send_data_index++];
 
-        /* builds send data command from command type */
+        /* build send data command from command type */
         const char* send_data_cmd = sdi12_master_send_data_command_string(address, send_data);
 
         /* send command to device and wait for response */
@@ -731,48 +731,47 @@ esp_err_t sdi12_master_send_identification(sdi12_master_handle_t handle, const c
     ESP_RETURN_ON_FALSE(((char)response[0] == address), ESP_ERR_INVALID_RESPONSE, TAG, "sdi-12 address is incorrect, send identification command failed");
 
     /* parse information */
-    sdi12_master_send_identification_t* out_ident = (sdi12_master_send_identification_t *)calloc(1, sizeof(sdi12_master_send_identification_t));
-    out_ident->sdi12_version[0] = (char)response[1];
-    out_ident->sdi12_version[1] = '.';
-    out_ident->sdi12_version[2] = (char)response[2];
-    out_ident->sdi12_version[3] = '\0';
-    out_ident->vendor_identification[0] = (char)response[3];
-    out_ident->vendor_identification[1] = (char)response[4];
-    out_ident->vendor_identification[2] = (char)response[5];
-    out_ident->vendor_identification[3] = (char)response[6];
-    out_ident->vendor_identification[4] = (char)response[7];
-    out_ident->vendor_identification[5] = (char)response[8];
-    out_ident->vendor_identification[6] = (char)response[9];
-    out_ident->vendor_identification[7] = (char)response[10];
-    out_ident->vendor_identification[8] = '\0';
-    out_ident->sensor_model[0] = (char)response[11];
-    out_ident->sensor_model[1] = (char)response[12];
-    out_ident->sensor_model[2] = (char)response[13];
-    out_ident->sensor_model[3] = (char)response[14];
-    out_ident->sensor_model[4] = (char)response[15];
-    out_ident->sensor_model[5] = '\0';
-    out_ident->sensor_version[0] = (char)response[16];
-    out_ident->sensor_version[1] = (char)response[17];
-    out_ident->sensor_version[2] = (char)response[18];
-    out_ident->sensor_version[3] = '\0';
-    out_ident->sensor_information[0] = (char)response[19];
-    out_ident->sensor_information[1] = (char)response[20];
-    out_ident->sensor_information[2] = (char)response[21];
-    out_ident->sensor_information[3] = (char)response[22];
-    out_ident->sensor_information[4] = (char)response[23];
-    out_ident->sensor_information[5] = (char)response[24];
-    out_ident->sensor_information[6] = (char)response[25];
-    out_ident->sensor_information[7] = (char)response[26];
-    out_ident->sensor_information[8] = (char)response[27];
-    out_ident->sensor_information[9] = (char)response[28];
-    out_ident->sensor_information[10] = (char)response[29];
-    out_ident->sensor_information[11] = (char)response[30];
-    out_ident->sensor_information[12] = (char)response[31];
-    out_ident->sensor_information[13] = '\0';
+    sdi12_master_send_identification_t out_ident;
+    out_ident.sdi12_version[0]         = (char)response[1];
+    out_ident.sdi12_version[1]         = '.';
+    out_ident.sdi12_version[2]         = (char)response[2];
+    out_ident.sdi12_version[3]         = '\0';
+    out_ident.vendor_identification[0] = (char)response[3];
+    out_ident.vendor_identification[1] = (char)response[4];
+    out_ident.vendor_identification[2] = (char)response[5];
+    out_ident.vendor_identification[3] = (char)response[6];
+    out_ident.vendor_identification[4] = (char)response[7];
+    out_ident.vendor_identification[5] = (char)response[8];
+    out_ident.vendor_identification[6] = (char)response[9];
+    out_ident.vendor_identification[7] = (char)response[10];
+    out_ident.vendor_identification[8] = '\0';
+    out_ident.sensor_model[0]          = (char)response[11];
+    out_ident.sensor_model[1]          = (char)response[12];
+    out_ident.sensor_model[2]          = (char)response[13];
+    out_ident.sensor_model[3]          = (char)response[14];
+    out_ident.sensor_model[4]          = (char)response[15];
+    out_ident.sensor_model[5]          = '\0';
+    out_ident.sensor_version[0]        = (char)response[16];
+    out_ident.sensor_version[1]        = (char)response[17];
+    out_ident.sensor_version[2]        = (char)response[18];
+    out_ident.sensor_version[3]        = '\0';
+    out_ident.sensor_information[0]    = (char)response[19];
+    out_ident.sensor_information[1]    = (char)response[20];
+    out_ident.sensor_information[2]    = (char)response[21];
+    out_ident.sensor_information[3]    = (char)response[22];
+    out_ident.sensor_information[4]    = (char)response[23];
+    out_ident.sensor_information[5]    = (char)response[24];
+    out_ident.sensor_information[6]    = (char)response[25];
+    out_ident.sensor_information[7]    = (char)response[26];
+    out_ident.sensor_information[8]    = (char)response[27];
+    out_ident.sensor_information[9]    = (char)response[28];
+    out_ident.sensor_information[10]   = (char)response[29];
+    out_ident.sensor_information[11]   = (char)response[30];
+    out_ident.sensor_information[12]   = (char)response[31];
+    out_ident.sensor_information[13]   = '\0';
 
     /* set output parameter */
-    memcpy(identification, out_ident, sizeof(sdi12_master_send_identification_t));
-    free(out_ident);
+    *identification = out_ident;
 
     return ESP_OK;
 }
