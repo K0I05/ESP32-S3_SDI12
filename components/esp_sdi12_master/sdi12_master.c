@@ -432,6 +432,97 @@ static inline bool sdi12_master_is_concurrent(const sdi12_master_measurement_com
     };
 }
 
+/**
+ * @brief Sends a start measurement or start concurent measurement command to the SDI-12 sensor and parses the response.
+ * 
+ * @param[in] handle SDI-12 master handle.
+ * @param[in] address SDI-12 sensor address.
+ * @param[in] command SDI-12 measurement command to send and process.
+ * @param[out] measurement SDI-12 start measurement or start concurent measurement structure (data ready delay and number of values).
+ * @return esp_err_t ESP_OK on success, ESP_ERR_INVALID_ARG if handle is NULL.
+ */
+static inline esp_err_t sdi12_master_measurement(sdi12_master_handle_t handle, const char address, const sdi12_master_measurement_commands_t command, sdi12_master_start_measurement_t *const measurement) {
+    const char* response;
+
+    /* validate arguments */
+    ESP_ARG_CHECK( handle );
+
+    /* build measurement command */
+    const char* cmd = sdi12_master_measurement_command_string(address, command);
+
+    // start measurement command response status code
+    ESP_RETURN_ON_ERROR(sdi12_master_send_command(handle, cmd, &response), TAG, "start measurement command failed");
+
+    /* validate response size */
+    ESP_RETURN_ON_FALSE((strnlen(response, SDI12_MASTER_M_CMD_RESPONSE_MAX_SIZE) < SDI12_MASTER_M_CMD_RESPONSE_MAX_SIZE), ESP_ERR_INVALID_SIZE, TAG, "response length cannot exceed %u characters, start measurement command failed", SDI12_MASTER_M_CMD_RESPONSE_MAX_SIZE);
+
+    /* validate address */
+    ESP_RETURN_ON_FALSE(((char)response[0] == address), ESP_ERR_INVALID_RESPONSE, TAG, "sdi-12 address is incorrect, start measurement command failed");
+
+    /* parse information */
+    sdi12_master_start_measurement_t out_meas;
+
+    /* validate if concurrent atttnn vs queued atttn */
+    if(sdi12_master_is_concurrent(command)) {
+        const char delay[] = { (char)response[1], (char)response[2], (char)response[3], '\0' };
+        const char vals[]  = { (char)response[4], (char)response[5], '\0' };
+
+        out_meas.data_ready_delay = (uint8_t)atoi(delay);
+        out_meas.number_of_values = (uint8_t)atoi(vals);
+    } else {
+        const char delay[] = { (char)response[1], (char)response[2], (char)response[3], '\0' };
+        const char vals[]  = { (char)response[4], '\0' };
+
+        out_meas.data_ready_delay = (uint8_t)atoi(delay);
+        out_meas.number_of_values = (uint8_t)atoi(vals);
+    }
+
+    /* set output parameter */
+    *measurement = out_meas;
+    
+    return ESP_OK;
+}
+
+/**
+ * @brief Parses an SDI-12 D0..D9 command response from device with <CR> and <LF> removed (i.e. 0+3.14+2.718+1.414).
+ * 
+ * @param response SDI-12 D0..D9 command response from device to parse.
+ * @param[out] values Parsed SDI-12 measurement values parsed from response.
+ * @param[out] size Number of SDI-12 measurement values parsed from response.
+ */
+static inline void sdi12_master_parse_d_response(const char* response, float **const values, size_t *const size) {
+    uint8_t rsp_char_index = 0;
+    uint8_t tok_count      = 0;
+    uint8_t rsp_len        = strnlen(response, SDI12_MASTER_RESPONSE_MAX_SIZE);
+    float*  out_values     = (float *)calloc(SDI12_MASTER_D_CMD_VALUES_MAX_SIZE, sizeof(float));
+
+    do {
+        /* check for token delimiter in the response string */
+        if(response[rsp_char_index] == '+' || response[rsp_char_index] == '-') {
+            bool    tok_end        = false;
+            uint8_t tok_char_index = 0;
+            char    token[SDI12_MASTER_DATA_VALUE_MAX_SIZE];
+            /* token found - preserve signing (+/-) */
+            token[tok_char_index] = response[rsp_char_index];
+            do {
+                /* advance to the next char in the response string */
+                token[tok_char_index++] = response[rsp_char_index++];
+                /* check for next token delimiter in the response string */
+                if((rsp_char_index + 1) == rsp_len || response[rsp_char_index + 1] == '+' || response[rsp_char_index + 1] == '-') {
+                    /* if we landed here, the token was extracted from the response */
+                    /* string, parse token to a float data-type and exit this loop */
+                    token[tok_char_index++] = '\0';
+                    out_values[tok_count++] = (float)atof(token);
+                    tok_end = true;
+                }
+            } while (tok_end == false);
+        }
+        rsp_char_index++;
+    } while (rsp_char_index < rsp_len);
+
+    *size = tok_count;
+    *values = out_values;
+}
 
 esp_err_t sdi12_master_init(const sdi12_master_config_t *sdi12_master_config, sdi12_master_handle_t *sdi12_master_handle) {
     esp_err_t ret = ESP_OK;
@@ -504,7 +595,7 @@ esp_err_t sdi12_master_send_command(sdi12_master_handle_t handle, const char* co
         //
         uint8_t rx_read_len = uart_read_bytes(handle->dev_config.uart_port, &rx_buffer, SDI12_MASTER_RESPONSE_MAX_SIZE, 100 / portTICK_PERIOD_MS);
         //
-        // iterate one byte at a time to remove <CR><LF>
+        // iterate one byte at a time and remove <CR><LF> chars
         //
         if(rx_read_len > 0) {
             uint8_t response_index = 0;
@@ -536,98 +627,6 @@ esp_err_t sdi12_master_send_command(sdi12_master_handle_t handle, const char* co
     *response = out_response;
     
     return ESP_OK;
-}
-
-/**
- * @brief 
- * 
- * @param[in] handle 
- * @param[in] address 
- * @param[in] command 
- * @param[out] measurement 
- * @return esp_err_t 
- */
-static inline esp_err_t sdi12_master_measurement(sdi12_master_handle_t handle, const char address, const sdi12_master_measurement_commands_t command, sdi12_master_start_measurement_t *const measurement) {
-    const char* response;
-
-    /* validate arguments */
-    ESP_ARG_CHECK( handle );
-
-    /* build measurement command */
-    const char* cmd = sdi12_master_measurement_command_string(address, command);
-
-    // start measurement command response status code
-    ESP_RETURN_ON_ERROR(sdi12_master_send_command(handle, cmd, &response), TAG, "start measurement command failed");
-
-    /* validate response size */
-    ESP_RETURN_ON_FALSE((strnlen(response, SDI12_MASTER_M_CMD_RESPONSE_MAX_SIZE) < SDI12_MASTER_M_CMD_RESPONSE_MAX_SIZE), ESP_ERR_INVALID_SIZE, TAG, "response length cannot exceed %u characters, start measurement command failed", SDI12_MASTER_M_CMD_RESPONSE_MAX_SIZE);
-
-    /* validate address */
-    ESP_RETURN_ON_FALSE(((char)response[0] == address), ESP_ERR_INVALID_RESPONSE, TAG, "sdi-12 address is incorrect, start measurement command failed");
-
-    /* parse information */
-    sdi12_master_start_measurement_t out_meas;
-
-    /* validate if concurrent atttnn vs atttn*/
-    if(sdi12_master_is_concurrent(command)) {
-        const char delay[] = { (char)response[1], (char)response[2], (char)response[3], '\0' };
-        const char vals[]  = { (char)response[4], (char)response[5], '\0' };
-
-        out_meas.data_ready_delay = (uint8_t)atoi(delay);
-        out_meas.number_of_values = (uint8_t)atoi(vals);
-    } else {
-        const char delay[] = { (char)response[1], (char)response[2], (char)response[3], '\0' };
-        const char vals[]  = { (char)response[4], '\0' };
-
-        out_meas.data_ready_delay = (uint8_t)atoi(delay);
-        out_meas.number_of_values = (uint8_t)atoi(vals);
-    }
-
-    /* set output parameter */
-    *measurement = out_meas;
-    
-    return ESP_OK;
-}
-
-/**
- * @brief Parses an SDI-12 D0..D9 command response from device with <CR> and <LF> removed (i.e. 0+3.14+2.718+1.414).
- * 
- * @param response SDI-12 D0..D9 command response from device to parse.
- * @param[out] values Parsed SDI-12 measurement values parsed from response.
- * @param[out] size Number of SDI-12 measurement values parsed from response.
- */
-static inline void sdi12_master_parse_d_response(const char* response, float **const values, size_t *const size) {
-    uint8_t rsp_char_index = 0;
-    uint8_t tok_count      = 0;
-    uint8_t rsp_len        = strnlen(response, SDI12_MASTER_RESPONSE_MAX_SIZE);
-    float*  out_values     = (float *)calloc(SDI12_MASTER_D_CMD_VALUES_MAX_SIZE, sizeof(float));
-
-    do {
-        /* check for token delimiter in the response string */
-        if(response[rsp_char_index] == '+' || response[rsp_char_index] == '-') {
-            bool    tok_end        = false;
-            uint8_t tok_char_index = 0;
-            char    token[SDI12_MASTER_DATA_VALUE_MAX_SIZE];
-            /* token found - preserve signing (+/-) */
-            token[tok_char_index] = response[rsp_char_index];
-            do {
-                /* advance to the next char in the response string */
-                token[tok_char_index++] = response[rsp_char_index++];
-                /* check for next token delimiter in the response string */
-                if((rsp_char_index + 1) == rsp_len || response[rsp_char_index + 1] == '+' || response[rsp_char_index + 1] == '-') {
-                    /* if we landed here, the token was extracted from the response */
-                    /* string, parse token to a float data-type and exit this loop */
-                    token[tok_char_index++] = '\0';
-                    out_values[tok_count++] = (float)atof(token);
-                    tok_end = true;
-                }
-            } while (tok_end == false);
-        }
-        rsp_char_index++;
-    } while (rsp_char_index < rsp_len);
-
-    *size = tok_count;
-    *values = out_values;
 }
 
 esp_err_t sdi12_master_recorder(sdi12_master_handle_t handle, const char address, const sdi12_master_measurement_commands_t command, float **const values, size_t *const size) {

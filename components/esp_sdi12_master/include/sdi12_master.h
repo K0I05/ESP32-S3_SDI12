@@ -257,8 +257,7 @@ typedef struct {
  * @brief SDI-12 master configuration structure.
  */
 typedef struct sdi12_master_config_s {
-    uint16_t uart_port;                 /*!< uart port number */
-    uint32_t uart_baudrate;             /*!< uart baudrate */
+    uint16_t   uart_port;               /*!< uart port number */
     gpio_num_t uart_tx_io_num;          /*!< uart tx pin */
     gpio_num_t uart_rx_io_num;          /*!< uart rx pin */
     gpio_num_t dc2364a_io_io_num;       /*!< logic supply ref voltage (dev board logic supply) */
@@ -317,7 +316,7 @@ esp_err_t sdi12_master_init(const sdi12_master_config_t *sdi12_master_config, sd
  * @brief Sends a command to the SDI-12 sensor and retrieves the response.
  * 
  * @param[in] handle SDI-12 master handle.
- * @param[in] command SDI-12 command to send.
+ * @param[in] command SDI-12 command to send and process.
  * @param[out] response Response from SDI-12 sensor.
  * @return esp_err_t ESP_OK on success, ESP_ERR_INVALID_ARG if handle is NULL.
  */
@@ -339,7 +338,7 @@ esp_err_t sdi12_master_parse_response(sdi12_master_handle_t handle, const char* 
  * 
  * @param[in] handle SDI-12 master handle.
  * @param[in] address SDI-12 sensor address.
- * @param[in] command SDI-12 measurement command to send.
+ * @param[in] command SDI-12 measurement command to send and process.
  * @param[out] values Array of values parsed from the response.
  * @param[out] size Number of values parsed from the response.
  * @return esp_err_t ESP_OK on success, ESP_ERR_INVALID_ARG if handle is NULL.
@@ -390,7 +389,7 @@ esp_err_t sdi12_master_address_query(sdi12_master_handle_t handle, char *const a
  * 
  * @param handle SDI-12 master handle.
  * @param[in] address SDI-12 sensor address.
- * @param[out] measurement SDI-12 sensor measurement structure.
+ * @param[out] measurement SDI-12 sensor measurement structure (data ready delay and number of values).
  * @return esp_err_t ESP_OK on success, ESP_ERR_INVALID_ARG if handle is NULL.
  */
 esp_err_t sdi12_master_start_measurement(sdi12_master_handle_t handle, const char address, sdi12_master_start_measurement_t *const measurement);
