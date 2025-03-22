@@ -20,7 +20,7 @@ There are basic SDI-12 circuit examples provided in the published SDI-12 protoco
 
 ![LTC2873 Block Diagram](images/LTC2873_Block_Diagram.png)
 
-When an SDI-12 command is issued, the microcontroller toggles the RE and DE pins to a logic high and the TX pin to a logic low for the start of transmission break sequence. After the break sequence period (~12.5ms), the microcontroller toggles the TX pin to a logic high for the mark sequence period (~8.3ms), the SDI-12 command characters are transmitted to the device, and then the microcontroller toggles the RE and DE pins to a logic low to while it waits to receive a response from the device.  There is a total of 7 GPIO pins needed to for microcontroller hardware interacing which are outlined below.
+When an SDI-12 command is issued, the microcontroller toggles the RE and DE pins to a logic high and the TX pin to a logic low for the start of the transmission break sequence. After the break sequence period (~12.5ms), the microcontroller toggles the TX pin to a logic high for the mark sequence period (~8.3ms), the SDI-12 command characters are transmitted to the device, and then the microcontroller toggles the RE and DE pins to a logic low while it waits to receive a response from the device.  There is a total of 7 GPIO pins needed for microcontroller hardware interacing which are outlined below.
 
 ```c
 #define SDI12_MASTER_TXD_IO_NUM                     (GPIO_NUM_17) /*!< uart ttl transmit */
@@ -34,13 +34,13 @@ When an SDI-12 command is issued, the microcontroller toggles the RE and DE pins
 #define SDI12_MASTER_MODE_IO_NUM                    (GPIO_NUM_21) /*!< logic low for rs-232 and high for rs-485 */
 ```
 
-If you have a logic analyzer, be sure to inverse the signals when sniffing the serial lines, otherwise the information will look like garbage.  To interface the SDI-12 device, the B/RI terminal is used on the DC2364A evaluation board, and ensure that the SDI-12 device is properly grounded with the DC2364A evaluation board.  Otherwise, you may experience unexpected behaviour and erroneous results.
+If you have a logic analyzer, be sure to inverse the signals when sniffing the serial lines, otherwise the information will look like garbage.  To interface the SDI-12 device, the B/RI terminal is used on the DC2364A evaluation board, and ensure that the SDI-12 device is properly grounded to the DC2364A evaluation board.  Otherwise, you may experience unexpected behaviour and erroneous results.
 
 ![Logic Analyzer Capture](images/logic_analyzer_capture_cmd.png)
 
 ## SDI-12 Prototyping & Controls
 
-A Campbell Scientific CR6 (<https://www.campbellsci.ca/cr6>) data-logger was programmed to emulate an SDI-12 sensor but I do have a multi-parameter SDI-12 meteorological sensor as a backup. For prototyping purposes, the CR6 is more than suitable to act as an SDI-12 control device, and programming implementation with the ESP32-S3 was troubleshooted with a Kingst LA1010 Logic Analizer. The ESP32-S3 board is interfaced to a breakout board with screw terminals for easy wiring to the Analog Devices DC2364A evaluation board.
+A Campbell Scientific CR6 (<https://www.campbellsci.ca/cr6>) data-logger was programmed to simulate an SDI-12 sensor but I do have a multi-parameter SDI-12 meteorological sensor as a backup. For prototyping purposes, the CR6 is more than suitable to act as an SDI-12 control device, and programming implementation with the ESP32-S3 was troubleshooted with a Kingst LA1010 Logic Analizer. The ESP32-S3 board is interfaced to a breakout board with screw terminals for easy wiring to the Analog Devices DC2364A evaluation board.
 
 ![Logic Analyzer Capture](images/logic_analyzer_capture.png)
 
@@ -76,11 +76,14 @@ W (35795) SDI-12 [APP]: sdi-12 sensor response value: 23.649290
 
 There is always room for improvement to optimize the code base and open to suggestions.  As an example, to free up the microcontroller's UART TX line, the code enables and disables the UART everytime a command is executed.
 
-## References
+## References & Resources
 
-Additional information on SDI-12 is available here:
+Additional information is available here:
 
 - <https://www.sdi-12.org/>
 - <https://en.wikipedia.org/wiki/SDI-12>
+- <https://www.analog.com/en/products/ltc2873.html>
+- <https://www.analog.com/en/resources/evaluation-hardware-and-software/evaluation-boards-kits/dc2364a.html#eb-overview>
+- <https://www.campbellsci.ca/cr6>
 
 Copyright (c) 2025 Eric Gionet (<gionet.c.eric@gmail.com>)
