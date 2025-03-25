@@ -464,7 +464,7 @@ static inline esp_err_t sdi12_master_measurement(sdi12_master_handle_t handle, c
     /* validate arguments */
     ESP_ARG_CHECK( handle );
 
-    /* determine measurement mode */
+    /* determine measurement mode from measurement command */
     sdi12_master_measurement_modes_t mode = sdi12_master_measurement_mode(command);
 
     /* validate measurement mode */
@@ -479,7 +479,7 @@ static inline esp_err_t sdi12_master_measurement(sdi12_master_handle_t handle, c
     // start measurement command response status code
     ESP_RETURN_ON_ERROR(sdi12_master_send_command(handle, cmd, &response), TAG, "start measurement command failed");
 
-    /* validate response size */
+    /* validate m command response size */
     ESP_RETURN_ON_FALSE((strnlen(response, SDI12_MASTER_M_CMD_RESPONSE_MAX_SIZE) < SDI12_MASTER_M_CMD_RESPONSE_MAX_SIZE), ESP_ERR_INVALID_SIZE, TAG, "response length cannot exceed %u characters, start measurement command failed", SDI12_MASTER_M_CMD_RESPONSE_MAX_SIZE);
 
     /* validate address */

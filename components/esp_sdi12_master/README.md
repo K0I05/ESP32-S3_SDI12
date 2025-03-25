@@ -54,7 +54,7 @@ The DC2364A evaluation board was interfaced to the CR6 data-logger with the DC23
 
 ![Logic Analyzer SDI-12 Command Capture](images/logic_analyzer_capture_cmd.png)
 
-If you have a logic analyzer, be sure to inverse the signals when sniffing the serial lines, otherwise the information will look like garbage.  To interface the SDI-12 device, the B/RI terminal is used on the DC2364A evaluation board, and ensure that the SDI-12 device is properly grounded to the DC2364A evaluation board.  Otherwise, you may experience unexpected behaviour and erroneous results.
+If you have a logic analyzer, be sure to inverse the signals when sniffing the serial lines, otherwise the information will look like garbage.  To interface the SDI-12 device, the B/RI terminal is used on the DC2364A evaluation board, and ensure that the SDI-12 device is properly grounded to the DC2364A evaluation board.  Otherwise, you may experience unexpected behaviour and erroneous results.  All of the jumpers and address switches on the DC2364A evaluation board were left to defaults.
 
 ![Logic Analyzer SDI-12 Command & Response Capture](images/logic_analyzer_capture.png)
 
@@ -68,7 +68,7 @@ The CR6 was programmed to output 6 parameters with a processing time of 4-second
 
 ## SDI-12 ESP-IDF Component Implementation
 
-The ESP32 espressif IoT development framework (esp-idf) compatible component is a beta release with basic functionality.
+The ESP32 espressif IoT development framework (esp-idf) compatible component is a beta release with basic functionality.  String values or metadata attribute features are not supported at this time.
 
 Key features implemented to date include:
 
@@ -97,6 +97,54 @@ W (35795) SDI-12 [APP]: sdi-12 sensor response value: 23.649290
 ```
 
 There is always room for improvement to optimize the code base and open to suggestions.  As an example, to free up the microcontroller's UART TX line, the code enables and disables the UART everytime a command is executed.  Is this an ideal approach or is there another way to handle this.
+
+### SDI-12 ESP-IDF Component M! Recorder Example
+
+A common command utilized with an SDI-12 sensor is the start measurement command `aM!` which instruct's the sensor to start a measurement.  The SDI-12 sensor should respond with the number parameters to return within the interval specified by the sensor in seconds within 810 milliseconds of the command being issued.  Otherwise, a timeout exception will be raised.  The SDI-12 master must wait, per the specified interval received from the `aM!` command, and then it issues a data request command `aD0` to receive processed measurements from the SDI-12 sensor.  If the `aD0` command didn't return all measurements, then additional data requests must be made until all measurements have been returned (i.e. aD0..aD9).  
+
+This entire process is automated by using the `sdi12_master_recorder` function that is available in the SDI-12 ESP-IDF component.  A measurement command example is provided below.
+
+```c
+static void i2c_0_task( void *pvParameters ) {
+    TickType_t xLastWakeTime = xTaskGetTickCount ();
+    
+    sdi12_master_config_t sdi12_master_cfg = SDI12_MASTER_CONFIG_DEFAULT;
+    sdi12_master_handle_t sdi12_master_hdl = NULL;
+    
+    sdi12_master_init(&sdi12_master_cfg, &sdi12_master_hdl);
+    if(sdi12_master_hdl == NULL) {
+        ESP_LOGE(APP_TAG, "sdi12_master_init failed");
+        esp_restart();
+    }
+
+    // task loop entry point
+    for ( ;; ) {
+        ESP_LOGI(APP_TAG, "######################## SDI-12 - START #########################");
+        
+        // handle sensor
+        float* values;
+        size_t size;
+        esp_err_t result = sdi12_master_recorder(sdi12_master_hdl, '0', SDI12_MASTER_M_COMMAND, &values, &size);
+        if(result != ESP_OK) {
+            ESP_LOGE(APP_TAG, "sdi12_master_send_command failed (%s)", esp_err_to_name(result));
+        } else {
+            for(int i = 0; i < size; i++) {
+                ESP_LOGW(APP_TAG, "sdi-12 sensor response value: %f", values[i]);
+            }
+        }
+        
+        ESP_LOGI(APP_TAG, "######################## SDI-12 - END ###########################");
+
+        // pause the task per defined wait period (30-seconds)
+        vTaskDelaySecUntil( &xLastWakeTime, 30 );
+    }
+    
+    // free up task resources and remove task from stack
+    vTaskDelete( NULL );
+}
+```
+
+The `sdi12_master_recorder(sdi12_master_hdl, '0', SDI12_MASTER_M_COMMAND, &values, &size);` line passes the SDI-12 master handle, SDI-12sensor address, and SDI-12 measurement command to the `sdi12_master_recorder` function with references to the returned values and the number of values to be returned.  For information on supported measurement commands, reference the `sdi12_master_measurement_commands_t` enumerator type, in the SDI-12 ESP-IDF component.  If the `sdi12_master_recorder` measurement transaction was successful, the function should return `ESP_OK`, and measurements should be available in the reference variables.  In the above example, each referenced value returned is printed to the serial port and measurement interval is every 30-seconds.
 
 ## References & Resources
 
