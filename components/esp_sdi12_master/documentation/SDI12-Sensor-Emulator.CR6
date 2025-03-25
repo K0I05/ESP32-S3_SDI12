@@ -1,0 +1,35 @@
+' Declare public variables
+Public SDI12(6)
+Public BatteryVoltage, PanelTemperature
+
+Dim count_up, count_down
+'
+'
+' Being program
+BeginProg
+  ' Maine scan
+  Scan(5,Sec,3,0)
+    ' Measure battery voltage
+    Battery(BatteryVoltage)
+    ' Measure panel temperature
+    PanelTemp(PanelTemperature, 60)
+  NextScan
+  '
+  ' Slow sequence scan
+  SlowSequence
+    Do
+      count_up = count_up + 1.6676
+      count_down = count_down - 1.343
+      SDI12(1) = count_up
+      SDI12(2) = PanelTemperature
+      SDI12(3) = count_down
+      SDI12(4) = PanelTemperature
+      SDI12(5) = count_down
+      SDI12(6) = PanelTemperature
+      ' Return 2 values on C3 with address 0 in 1-sec
+      SDI12SensorSetup(6,C3,0,4)
+      ' Give measurements to SDI-12 recorder
+      SDI12SensorResponse(SDI12())
+    Loop
+  EndSequence
+EndProg

@@ -1,0 +1,23 @@
+version: "0.0.10"
+license: "MIT"
+description: "ESP32 espressif IoT development framework (esp-idf) compatible component
+  for SDI-12 compatible sensors."
+url: "https://github.com/K0I05/ESP32-S3_SDI12_20241231"
+repository: "https://github.com/K0I05/ESP32-S3_SDI12_20241231.git"
+registry_url: "https://components.espressif.com"
+documentation: "https://github.com/K0I05/ESP32-S3_SDI12_20241231/blob/main/components/esp_sdi12_master/README.md"
+tags:
+- environmental
+- instrumentation
+- sensor
+- sdi12
+- espidf
+- esp32
+targets:
+- esp32
+- esp32s3
+dependencies:
+  idf:
+    version: ">5.3.0"
+maintainers:
+- Eric Gionet <gionet.c.eric@gmail.com>

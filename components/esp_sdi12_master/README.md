@@ -20,7 +20,7 @@ There are basic SDI-12 circuit examples provided in the published SDI-12 protoco
 
 ![LTC2873 Block Diagram](images/LTC2873_Block_Diagram.png)
 
-When an SDI-12 command is issued, the microcontroller toggles the RE and DE pins to a logic high and the TX pin to a logic low for the start of the transmission break sequence. After the break sequence period (~12.5ms), the microcontroller toggles the TX pin to a logic high for the mark sequence period (~8.3ms), the SDI-12 command characters are transmitted to the device, and then the microcontroller toggles the RE and DE pins to a logic low while it waits to receive a response from the device.  There is a total of 7 GPIO pins needed for microcontroller hardware interacing which are outlined below.
+When an SDI-12 command is issued, the microcontroller toggles the RE and DE pins to a logic high and the TX pin to a logic low for the start of the transmission break sequence. After the break sequence period (~12.5ms), the microcontroller toggles the TX pin to a logic high for the mark sequence period (~8.3ms), the SDI-12 command characters are transmitted to the device, and then the microcontroller toggles the RE and DE pins to a logic low while it waits to receive a response from the device.  There is a total of 7 GPIO pins needed for microcontroller and DC2364A evaluation board hardware interacing which are defined below.
 
 ```c
 #define SDI12_MASTER_TXD_IO_NUM                     (GPIO_NUM_17) /*!< uart ttl transmit */
@@ -34,6 +34,24 @@ When an SDI-12 command is issued, the microcontroller toggles the RE and DE pins
 #define SDI12_MASTER_MODE_IO_NUM                    (GPIO_NUM_21) /*!< logic low for rs-232 and high for rs-485 */
 ```
 
+The microcontroller, ESP32-S3, is interfaced to the Analog Devices DC2364A evaluation board as outlined below.
+
+```text
+MCU GPIO Pin Definitions            DC2364A Pin Definitions
+----------------------------------------------------------------
+3.3VDC POWER                        3V
+Ground                              G
+SDI12_MASTER_TXD_IO_NUM             11 (TX)
+SDI12_MASTER_RXD_IO_NUM             10 (RX)
+SDI12_MASTER_IO_IO_NUM              IO (IO)
+SDI12_MASTER_DE_IO_NUM              ~3 (DE)
+SDI12_MASTER_RE_IO_NUM              4 (RE)
+SDI12_MASTER_TE_IO_NUM              ~6 (TE)
+SDI12_MASTER_MODE_IO_NUM            ~5 (MODE)
+```
+
+The DC2364A evaluation board was interfaced to the CR6 data-logger with the DC2364A's ground connected to `G` on the CR6 and `B/RI` of the DC2364A was connected to port `C3` on the CR6 for serial data.  The CR6, ESP32-S3, and Kingst LA1010 Logic Analizerand were connected t the laptop's USB ports for power and communication.
+
 ![Logic Analyzer SDI-12 Command Capture](images/logic_analyzer_capture_cmd.png)
 
 If you have a logic analyzer, be sure to inverse the signals when sniffing the serial lines, otherwise the information will look like garbage.  To interface the SDI-12 device, the B/RI terminal is used on the DC2364A evaluation board, and ensure that the SDI-12 device is properly grounded to the DC2364A evaluation board.  Otherwise, you may experience unexpected behaviour and erroneous results.
@@ -45,6 +63,8 @@ If you have a logic analyzer, be sure to inverse the signals when sniffing the s
 A Campbell Scientific CR6 data-logger was programmed to simulate an SDI-12 sensor but I do have a multi-parameter SDI-12 meteorological sensor as a backup. For prototyping purposes, the CR6 is more than suitable to act as an SDI-12 control device, and programming implementation with the ESP32-S3 was troubleshooted with a Kingst LA1010 Logic Analizer. The ESP32-S3 board is interfaced to a breakout board with screw terminals for easy wiring to the Analog Devices DC2364A evaluation board.
 
 ![Prototyping Capture](images/IMG_2610.jpg)
+
+The CR6 was programmed to output 6 parameters with a processing time of 4-seconds.  When the SDI-12 master executes an `aM!` command the CR6 will respond with a `a0104<CR><LF>`.  The SDI-12 master removes the `<CR><LF>` characters from command responses.  The CR6 program that was used is available in the documentation folder (SDI12-Sensor-Emulator.CR6) and can be viewed with any text editor.
 
 ## SDI-12 ESP-IDF Component Implementation
 
