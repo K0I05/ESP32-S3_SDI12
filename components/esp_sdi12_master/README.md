@@ -96,7 +96,7 @@ A Campbell Scientific CR6 data-logger was programmed to simulate an SDI-12 senso
 
 ![Prototyping Capture](images/IMG_2610.jpg)
 
-The CR6 was programmed to output 6 parameters with a processing time of 4-seconds.  When the SDI-12 master executes an `aM!` command the CR6 will respond with a `a0104<CR><LF>`.  The SDI-12 master removes the `<CR><LF>` characters from command responses.  The CR6 program that was used is available in the documentation folder (SDI12-Sensor-Emulator.CR6) and can be viewed with any text editor.
+The CR6 was programmed to output 6 parameters with a processing time of 4-seconds.  When the SDI-12 master executes an `aM!` command the CR6 will respond with a `a0046<CR><LF>`.  The SDI-12 master removes the `<CR><LF>` characters from command responses.  The CR6 program that was used is available in the documentation folder (SDI12-Sensor-Emulator.CR6) and can be viewed with any text editor.
 
 ## SDI-12 ESP-IDF Component Implementation
 
