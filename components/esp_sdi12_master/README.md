@@ -128,7 +128,7 @@ W (35795) SDI-12 [APP]: sdi-12 sensor response value: -2.680000
 W (35795) SDI-12 [APP]: sdi-12 sensor response value: 23.649290
 ```
 
-There is always room for improvement to optimize the code base and open to suggestions.  As an example, to free up the microcontroller's UART TX line, the code enables and disables the UART everytime a command is executed.  Is this an ideal approach or is there better way to handle this.
+There is always room for improvement to optimize the code base, feel free to contact me, I am open to suggestions.
 
 ### SDI-12 ESP-IDF Component - Repository
 

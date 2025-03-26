@@ -40,6 +40,8 @@
 #include <esp_err.h>
 #include <driver/uart.h>
 #include <driver/gpio.h>
+#include <esp_rom_gpio.h>
+#include <soc/uart_periph.h>
 #include "sdi12_master_version.h"
 
 

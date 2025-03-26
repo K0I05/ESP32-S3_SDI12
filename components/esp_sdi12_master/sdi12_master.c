@@ -272,7 +272,13 @@ static inline esp_err_t sdi12_master_gpio_init(sdi12_master_handle_t handle) {
     return ESP_OK;
 }
 
-static inline esp_err_t sdi12_master_uart_enable(sdi12_master_handle_t handle) {
+/**
+ * @brief Initializes SDI-12 master UART.
+ * 
+ * @param handle SDI-12 master handle.
+ * @return esp_err_t ESP_OK on success, ESP_ERR_INVALID_ARG if handle is NULL.
+ */
+static inline esp_err_t sdi12_master_uart_init(sdi12_master_handle_t handle) {
     /* validate arguments */
     ESP_ARG_CHECK( handle );
 
@@ -290,21 +296,43 @@ static inline esp_err_t sdi12_master_uart_enable(sdi12_master_handle_t handle) {
         .flow_ctrl  = UART_HW_FLOWCTRL_DISABLE,
         .source_clk = UART_SCLK_DEFAULT
     };
-    int intr_alloc_flags = 0;
 
     /* configure uart */
-    ESP_RETURN_ON_ERROR( uart_driver_install(handle->dev_config.uart_port, SDI12_MASTER_UART_RX_BUFFER_SIZE * 2, 0, 0, NULL, intr_alloc_flags), TAG, "unable to install uart drive, uart enable failed");
+    ESP_RETURN_ON_ERROR( uart_driver_install(handle->dev_config.uart_port, SDI12_MASTER_UART_RX_BUFFER_SIZE * 2, 0, 0, NULL, 0), TAG, "unable to install uart drive, uart enable failed");
     ESP_RETURN_ON_ERROR( uart_param_config(handle->dev_config.uart_port, &uart_config), TAG, "unable to configure uart parameters, uart enable failed");
     ESP_RETURN_ON_ERROR( uart_set_pin(handle->dev_config.uart_port, handle->dev_config.uart_tx_io_num, handle->dev_config.uart_rx_io_num, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE), TAG, "unable to set uart pins, uart enable failed");
 
     return ESP_OK;
 }
 
-static inline esp_err_t sdi12_master_uart_disable(sdi12_master_handle_t handle) {
+/**
+ * @brief Connects transmit pin to the UART peripheral output signal.  This function 
+ * must be called to use the initialized UART.
+ * 
+ * @param handle SDI-12 master handle.
+ * @return esp_err_t ESP_OK on success, ESP_ERR_INVALID_ARG if handle is NULL.
+ */
+static inline esp_err_t sdi12_master_uart_connect_tx(sdi12_master_handle_t handle) {
     /* validate arguments */
     ESP_ARG_CHECK( handle );
 
-    ESP_RETURN_ON_ERROR( uart_driver_delete(handle->dev_config.uart_port), TAG, "unable to delete uart drive, uart disable failed");
+    esp_rom_gpio_connect_out_signal(handle->dev_config.uart_tx_io_num, UART_PERIPH_SIGNAL(handle->dev_config.uart_port, SOC_UART_TX_PIN_IDX), false, false);
+
+    return ESP_OK;
+}
+
+/**
+ * @brief Disconnects transmit pin from the UART peripheral output signal.  This function
+ * must be called to use the transmit pin as a GPIO (i.e. break and mark).
+ * 
+ * @param handle SDI-12 master handle.
+ * @return esp_err_t ESP_OK on success, ESP_ERR_INVALID_ARG if handle is NULL.
+ */
+static inline esp_err_t sdi12_master_uart_disconnect_tx(sdi12_master_handle_t handle) {
+    /* validate arguments */
+    ESP_ARG_CHECK( handle );
+
+    esp_rom_gpio_connect_out_signal(handle->dev_config.uart_tx_io_num, SIG_GPIO_OUT_IDX, false, false);
 
     return ESP_OK;
 }
@@ -1246,6 +1274,12 @@ esp_err_t sdi12_master_init(const sdi12_master_config_t *sdi12_master_config, sd
     /* copy configuration */
     out_handle->dev_config = *sdi12_master_config;
 
+    /* attempt to initialize gpio pins and levels for ltc2873 */
+    ESP_GOTO_ON_ERROR( sdi12_master_gpio_init(out_handle), err, TAG, "unable to init gpio pins, init failed");
+
+    /* attempt to initialize uart */
+    ESP_GOTO_ON_ERROR( sdi12_master_uart_init(out_handle), err, TAG, "unable to init uart, init failed");
+
     /* set output parameter */
     *sdi12_master_handle = out_handle;
 
@@ -1261,17 +1295,17 @@ esp_err_t sdi12_master_send_command(sdi12_master_handle_t handle, const char* co
     /* validate command size */
     ESP_RETURN_ON_FALSE((strnlen(command, SDI12_MASTER_COMMAND_MAX_SIZE) < SDI12_MASTER_COMMAND_MAX_SIZE), ESP_ERR_INVALID_SIZE, TAG, "command length cannot exceed %u characters, send command failed", SDI12_MASTER_COMMAND_MAX_SIZE);
 
-    /* attempt to initialize gpio pins and levels for ltc2873 */
-    ESP_RETURN_ON_ERROR( sdi12_master_gpio_init(handle), TAG, "unable to init gpio pins, send command failed");
+    /* attempt to disconnect uart tx pin - uart tx pin is now configured as a gpio */
+    ESP_RETURN_ON_ERROR( sdi12_master_uart_disconnect_tx(handle), TAG, "unable to disconnect uart tx pin, send command failed");
 
-    /* send break */
+    /* attempt to send break (uart tx pin configured as a gpio) */
     ESP_RETURN_ON_ERROR(sdi12_master_break(handle), TAG, "unable to send break, send command failed");
 
-    /* send mark */
+    /* attempt to send mark (uart tx pin configured as a gpio) */
     ESP_RETURN_ON_ERROR(sdi12_master_mark(handle), TAG, "unable to send master mark, send command failed");
 
-    /* enable uart */
-    ESP_RETURN_ON_ERROR(sdi12_master_uart_enable(handle), TAG, "unable to enable uart, send command failed");
+    /* attempt to connect uart tx pin - uart tx pin is now configured to transmit serial data */
+    ESP_RETURN_ON_ERROR( sdi12_master_uart_connect_tx(handle), TAG, "unable to connect uart tx pin, send command failed");
 
     /* send command */
     for(int i = 0; i < strnlen(command, SDI12_MASTER_COMMAND_MAX_SIZE); i++) {
@@ -1318,8 +1352,8 @@ esp_err_t sdi12_master_send_command(sdi12_master_handle_t handle, const char* co
         }
     }
 
-    /* disable uart */
-    ESP_RETURN_ON_ERROR(sdi12_master_uart_disable(handle), TAG, "unable to disable uart, send command failed");
+    /* attempt to disconnect uart tx pin - uart tx pin is now configured as a gpio */
+    ESP_RETURN_ON_ERROR( sdi12_master_uart_disconnect_tx(handle), TAG, "unable to disconnect uart tx pin, send command failed");
 
     /* validate sensor responded within the max total response time */
     ESP_RETURN_ON_FALSE(end_command, ESP_ERR_TIMEOUT, TAG, "response timed out, send command failed");
@@ -1516,8 +1550,8 @@ esp_err_t sdi12_master_delete(sdi12_master_handle_t handle) {
 
     /* check if driver is installed */
     if(uart_is_driver_installed(handle->dev_config.uart_port) == true) {
-        /* disable uart */
-        ESP_RETURN_ON_ERROR(sdi12_master_uart_disable(handle), TAG, "unable to disable uart, delete failed");
+        /* delete uart driver */
+        ESP_RETURN_ON_ERROR( uart_driver_delete(handle->dev_config.uart_port), TAG, "unable to delete uart driver, delete failed");
     }
 
     /* free handle */

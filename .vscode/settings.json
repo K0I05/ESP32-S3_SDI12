@@ -1,6 +1,7 @@
 {
     "files.associations": {
-        "uart.h": "c"
+        "uart.h": "c",
+        "format": "c"
     },
     "idf.customExtraVars": {
         "OPENOCD_SCRIPTS": "C:\\Espressif\\tools\\openocd-esp32\\v0.12.0-esp32-20240318/openocd-esp32/share/openocd/scripts",
