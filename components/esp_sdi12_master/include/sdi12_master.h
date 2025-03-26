@@ -107,15 +107,17 @@ ESP32-S3 GPIO Summary:
 */
 
 /**
- * @brief SDI-12 master measurement start commands (M, MC, C, CC, R, and RC) 
+ * @brief SDI-12 master measurement base commands (M, MC, C, CC, R, and RC) 
  * enumerator.  This command is used to start measurement(s) onboard the SDI-12 
  * sensor which returns measurement queuing information (atttn or atttnn) from
  * queued or concurrent measurement commands or measurement values (like a D 
  * command response) from continuous measurement command when send data or 
  * measurement values are requested from the SDI-12 sensor.  See table 5 - 'The 
  * SDI-12 basic command/response set' in the SDI-12 specification document.
+ * 
+ * @note CRC measurement commands (MC, CC, and RC)  are not supported at this time.
  */
-typedef enum sdi12_master_measurement_commands_e {
+typedef enum sdi12_master_measurement_base_commands_e {
     SDI12_MASTER_M_COMMAND = 0, /*!< start measurement command, aM! (response is formatted as atttn) */
     SDI12_MASTER_M1_COMMAND,    /*!< start additional measurement command, aM1! (response is formatted as atttn), as defined by the sensor manufacturer */
     SDI12_MASTER_M2_COMMAND,    /*!< start additional measurement command, aM2! (response is formatted as atttn), as defined by the sensor manufacturer */
@@ -176,17 +178,17 @@ typedef enum sdi12_master_measurement_commands_e {
     SDI12_MASTER_RC7_COMMAND,   /*!< start continuous measurement command with CRC, aR7! (response is formatted like the D command), as defined by the sensor manufacturer */
     SDI12_MASTER_RC8_COMMAND,   /*!< start continuous measurement command with CRC, aR8! (response is formatted like the D command), as defined by the sensor manufacturer */
     SDI12_MASTER_RC9_COMMAND    /*!< start continuous measurement command with CRC, aR9! (response is formatted like the D command), as defined by the sensor manufacturer */
-} sdi12_master_measurement_commands_t;
+} sdi12_master_measurement_base_commands_t;
 
 /**
- * @brief SDI-12 master send data (`D`) commands enumerator.  This command is used 
+ * @brief SDI-12 master send data (`D`) base commands enumerator.  This command is used 
  * in sequence of measurement start commands (M, MC, C, and CC) to retrieve measurement 
  * values once the measurements have been processed and are ready for collection. See 
  * measurement queue structure `sdi12_master_measurement_queue_t` that is returned from 
  * measurement start commands (M, MC, C, and CC).  See table 5 - 'The  SDI-12 basic 
  * command/response set' in the SDI-12 specification document.
  */
-typedef enum sdi12_master_send_data_commands_e {
+typedef enum sdi12_master_send_data_base_commands_e {
     SDI12_MASTER_D0_COMMAND = 0,/*!< send data command, aD0!, (response is formatted as a<values><CR><LF> or a<values><CRC><CR><LF> [see measurement commands `sdi12_master_measurement_commands_t`]) */
     SDI12_MASTER_D1_COMMAND,    /*!< send data command, aD1!, (response is formatted as a<values><CR><LF> or a<values><CRC><CR><LF> [see measurement commands `sdi12_master_measurement_commands_t`]) */
     SDI12_MASTER_D2_COMMAND,    /*!< send data command, aD2!, (response is formatted as a<values><CR><LF> or a<values><CRC><CR><LF> [see measurement commands `sdi12_master_measurement_commands_t`]) */
@@ -197,7 +199,7 @@ typedef enum sdi12_master_send_data_commands_e {
     SDI12_MASTER_D7_COMMAND,    /*!< send data command, aD7!, (response is formatted as a<values><CR><LF> or a<values><CRC><CR><LF> [see measurement commands `sdi12_master_measurement_commands_t`]) */
     SDI12_MASTER_D8_COMMAND,    /*!< send data command, aD8!, (response is formatted as a<values><CR><LF> or a<values><CRC><CR><LF> [see measurement commands `sdi12_master_measurement_commands_t`]) */
     SDI12_MASTER_D9_COMMAND     /*!< send data command, aD9!, (response is formatted as a<values><CR><LF> or a<values><CRC><CR><LF> [see measurement commands `sdi12_master_measurement_commands_t`]) */
-} sdi12_master_send_data_commands_t;
+} sdi12_master_send_data_base_commands_t;
 
 /**
  * @brief SDI-12 master measurement modes enumerator.  Queued measurement 
@@ -232,7 +234,7 @@ typedef struct sdi12_master_sensor_identification_s {
  * structure is returned from measurement commands (M, MC, C, and CC) or
  * from a verification command (V) issued to the SDI-12 sensor.
  */
-typedef struct {
+typedef struct sdi12_master_measurement_queue_s {
     uint8_t data_ready_delay;  /*!< time in seconds before the measurement(s) is ready */
     uint8_t number_of_values;  /*!< number of measurement values the sensor is expected to return (1 to 9) */
 } sdi12_master_measurement_queue_t;
@@ -301,21 +303,10 @@ esp_err_t sdi12_master_init(const sdi12_master_config_t *sdi12_master_config, sd
  * 
  * @param[in] handle SDI-12 master handle.
  * @param[in] command SDI-12 command to send and process.
- * @param[out] response Response from SDI-12 sensor.
+ * @param[out] response Response from SDI-12 sensor with <CR><LF> characters removed.
  * @return esp_err_t ESP_OK on success, ESP_ERR_INVALID_ARG if handle is NULL.
  */
 esp_err_t sdi12_master_send_command(sdi12_master_handle_t handle, const char* command, const char **const  response);
-
-/**
- * @brief Parses the response from the SDI-12 sensor.
- * 
- * @param[in] handle SDI-12 master handle.
- * @param[in] response SDI-12 sensor response.
- * @param[out] values Array of values parsed from the response.
- * @param[out] size Number of values parsed from the response.
- * @return esp_err_t ESP_OK on success, ESP_ERR_INVALID_ARG if handle is NULL.
- */
-esp_err_t sdi12_master_parse_response(sdi12_master_handle_t handle, const char* response, float **const values, uint8_t *const size);
 
 /**
  * @brief Sends a measurement command to the SDI-12 sensor, waits for 
@@ -325,12 +316,12 @@ esp_err_t sdi12_master_parse_response(sdi12_master_handle_t handle, const char* 
  * 
  * @param[in] handle SDI-12 master handle.
  * @param[in] address SDI-12 sensor address.
- * @param[in] command SDI-12 measurement command to send and process.
- * @param[out] values Array of values parsed from the response.
- * @param[out] size Number of values parsed from the response.
+ * @param[in] command SDI-12 measurement based command.
+ * @param[out] values Array of values parsed from the SDI-12 data send response.
+ * @param[out] size Number of values parsed from the SDI-12 data send response.
  * @return esp_err_t ESP_OK on success, ESP_ERR_INVALID_ARG if handle is NULL.
  */
-esp_err_t sdi12_master_recorder(sdi12_master_handle_t handle, const char address, const sdi12_master_measurement_commands_t command, float **const values, uint8_t *const size);
+esp_err_t sdi12_master_recorder(sdi12_master_handle_t handle, const char address, const sdi12_master_measurement_base_commands_t command, float **const values, uint8_t *const size);
 
 /**
  * @brief Sends an acknowledge active command to the SDI-12 sensor.
@@ -368,7 +359,7 @@ esp_err_t sdi12_master_acknowledge_active(sdi12_master_handle_t handle, const ch
 esp_err_t sdi12_master_send_identification(sdi12_master_handle_t handle, const char address, sdi12_master_sensor_identification_t *const identification);
 
 /**
- * @brief Sends a change address command to the SDI-12 sensor.
+ * @brief Sends a change address command to change the address of the SDI-12 sensor.
  * 
  * @param handle SDI-12 master handle.
  * @param address SDI-12 sensor address.
@@ -378,32 +369,13 @@ esp_err_t sdi12_master_send_identification(sdi12_master_handle_t handle, const c
 esp_err_t sdi12_master_change_address(sdi12_master_handle_t handle, const char address, const char new_address);
 
 /**
- * @brief Sends an address query command to the SDI-12 sensor.
+ * @brief Sends an address query command on the SDI-12 bus to determine the address of an SDI-12 sensor.
  * 
  * @param handle SDI-12 master handle.
- * @param[out] address
+ * @param[out] address SDI-12 sensor address.
  * @return esp_err_t ESP_OK on success, ESP_ERR_INVALID_ARG if handle is NULL.
  */
 esp_err_t sdi12_master_address_query(sdi12_master_handle_t handle, char *const address);
-
-/**
- * @brief Sends a start measurement command to the SDI-12 sensor.
- * 
- * @param handle SDI-12 master handle.
- * @param[in] address SDI-12 sensor address.
- * @param[out] queue SDI-12 sensor measurement queuing structure (data ready delay and number of values).
- * @return esp_err_t ESP_OK on success, ESP_ERR_INVALID_ARG if handle is NULL.
- */
-esp_err_t sdi12_master_start_measurement(sdi12_master_handle_t handle, const char address, sdi12_master_measurement_queue_t *const queue);
-
-/**
- * @brief Aborts a previously issued start measurement command from the SDI-12 sensor.
- * 
- * @param handle SDI-12 master handle.
- * @param[in] address SDI-12 sensor address.
- * @return esp_err_t ESP_OK on success, ESP_ERR_INVALID_ARG if handle is NULL.
- */
-esp_err_t sdi12_master_abort_measurement(sdi12_master_handle_t handle, const char address);
 
 /**
  * @brief Removes an SDI-12 master from uart and frees handle.
@@ -411,7 +383,7 @@ esp_err_t sdi12_master_abort_measurement(sdi12_master_handle_t handle, const cha
  * @param[in] handle SDI-12 master handle.
  * @return esp_err_t ESP_OK on success.
  */
-esp_err_t bme680_delete(sdi12_master_handle_t handle);
+esp_err_t sdi12_master_delete(sdi12_master_handle_t handle);
 
 /**
  * @brief Converts SDI-12 master firmware version numbers (major, minor, patch, build) into a string.

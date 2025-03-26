@@ -65,40 +65,66 @@ static void i2c_0_task( void *pvParameters ) {
     sdi12_master_config_t sdi12_master_cfg = SDI12_MASTER_CONFIG_DEFAULT;
     sdi12_master_handle_t sdi12_master_hdl = NULL;
     
+    /* attempt to instantiate sdi-12 handle */
     sdi12_master_init(&sdi12_master_cfg, &sdi12_master_hdl);
     if(sdi12_master_hdl == NULL) {
-        //ESP_LOGE(APP_TAG, "sdi12_master_init failed: %s", esp_err_to_name(result));
-        //esp_restart();
+        ESP_LOGE(APP_TAG, "sdi12_master_init failed");
+        esp_restart();
     }
+
+    ESP_LOGI(APP_TAG, "sdi-12 master fw version: %s", sdi12_master_get_fw_version());
 
     // task loop entry point
     for ( ;; ) {
         ESP_LOGI(APP_TAG, "######################## SDI-12 - START #########################");
-        
-        // handle sensor
-        float* values;
-        uint8_t size;
-        esp_err_t result = sdi12_master_recorder(sdi12_master_hdl, '0', SDI12_MASTER_M_COMMAND, &values, &size);
+
+        /* address query */
+        char sensor_addrs;
+        esp_err_t result = sdi12_master_address_query(sdi12_master_hdl, &sensor_addrs);
         if(result != ESP_OK) {
-            ESP_LOGE(APP_TAG, "sdi12_master_send_command failed (%s)", esp_err_to_name(result));
+            ESP_LOGE(APP_TAG, "sdi12_master_address_query failed (%s)", esp_err_to_name(result));
         } else {
-            for(int i = 0; i < size; i++) {
-                ESP_LOGW(APP_TAG, "sdi-12 sensor response value: %f", values[i]);
-            }
+            ESP_LOGI(APP_TAG, "sdi-12 sensor found: %c", sensor_addrs);
         }
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
         
-        vTaskDelay(pdMS_TO_TICKS(5000));
-        
+        /* acknowledge active */
+        bool active = false;
+        result = sdi12_master_acknowledge_active(sdi12_master_hdl, '0', &active);
+        if(result != ESP_OK) {
+            ESP_LOGE(APP_TAG, "sdi12_master_acknowledge_active failed (%s)", esp_err_to_name(result));
+        } else {
+            ESP_LOGI(APP_TAG, "sdi-12 sensor active: %s", active ? "true" : "false");
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+
+        /* send identification */
         sdi12_master_sensor_identification_t sdi12_identification;
         result = sdi12_master_send_identification(sdi12_master_hdl, '0', &sdi12_identification);
         if(result != ESP_OK) {
             ESP_LOGE(APP_TAG, "sdi12_master_send_identification failed (%s)", esp_err_to_name(result));
         } else {
-            ESP_LOGW(APP_TAG, "sdi-12 version:        %s", sdi12_identification.sdi12_version);
-            ESP_LOGW(APP_TAG, "vendor identification: %s", sdi12_identification.vendor_identification);
-            ESP_LOGW(APP_TAG, "sensor model:          %s", sdi12_identification.sensor_model);
-            ESP_LOGW(APP_TAG, "sensor version:        %s", sdi12_identification.sensor_version);
-            ESP_LOGW(APP_TAG, "sensor information:    %s", sdi12_identification.sensor_information);
+            ESP_LOGI(APP_TAG, "sdi-12 version:        %s", sdi12_identification.sdi12_version);
+            ESP_LOGI(APP_TAG, "vendor identification: %s", sdi12_identification.vendor_identification);
+            ESP_LOGI(APP_TAG, "sensor model:          %s", sdi12_identification.sensor_model);
+            ESP_LOGI(APP_TAG, "sensor version:        %s", sdi12_identification.sensor_version);
+            ESP_LOGI(APP_TAG, "sensor information:    %s", sdi12_identification.sensor_information);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(5000));
+
+        /* recorder m command */
+        float* values;
+        uint8_t size;
+        result = sdi12_master_recorder(sdi12_master_hdl, '0', SDI12_MASTER_M_COMMAND, &values, &size);
+        if(result != ESP_OK) {
+            ESP_LOGE(APP_TAG, "sdi12_master_recorder failed (%s)", esp_err_to_name(result));
+        } else {
+            for(int i = 0; i < size; i++) {
+                ESP_LOGI(APP_TAG, "sdi-12 sensor response value: %.2f", values[i]);
+            }
         }
 
         ESP_LOGI(APP_TAG, "######################## SDI-12 - END ###########################");
@@ -108,6 +134,7 @@ static void i2c_0_task( void *pvParameters ) {
     }
 
     // free up task resources and remove task from stack
+    sdi12_master_delete( sdi12_master_hdl );
     vTaskDelete( NULL );
 }
 
