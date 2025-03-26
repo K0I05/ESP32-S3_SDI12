@@ -12,17 +12,30 @@ If you have a background in instrumentation and environmental monitoring, then y
 
 ## SDI-12 Electrical Interface
 
-The SDI-12 electrical interface consist of a bus to power and transmit serial data between data-recorders and sensors.  In this context, the bus is a multiconductor cable that connects multiple SDI-12 devices, comprised of three conductors for power (12VDC), grounding, and serial data.  The SDI-12 bus can handle up to 10 devices simultaneously connected to the bus with a limit of 60 meters of cable length between each sensor.  Longer cable lengths are possible if there are fewere devices on the SDI-12 bus.
+The SDI-12 electrical interface consist of a bus to power and transmit serial data between data-recorders and sensors.  In this context, the bus is a multiconductor cable that connects multiple SDI-12 devices, is comprised of three conductors for power (12VDC), grounding, and serial data.  The SDI-12 bus can handle up to 10 devices simultaneously connected to the bus with a limit of 60 meters of cable length between each sensor.  Longer cable lengths are possible if there are fewere devices on the SDI-12 bus.
+
+![SDI-12 Bus](images/sdi12-bus.png)
 
 ## ESP32-S3 SDI-12 Electrical Interface
 
-There are basic SDI-12 circuit examples provided in the published SDI-12 protocol standard.  However, for greater flexibility and versatility, the LTC2873 single-bus RS-485/RS-232 multiprotocol transceiver with switchable termination by Analog Devices was utilized and evaluated with the Analog Devices DC2364A evaluation board.  The LTC2873 is user configurable through GPIO pins for hardware interfacing with the microcontroller and can be programmed for RS-485 with full or half-duplex, RS-422, RS-232, and SDI-12 communication protocols.  The LTC2873 supports tri-state conditions through the receiver enable (RE) and driver enable (DE) pins making it suitable for SDI-12 communication protocol.
+There are basic SDI-12 circuit examples provided in the published SDI-12 protocol standard.  However, for greater flexibility and versatility, the LTC2873 single-bus RS-485/RS-232 multiprotocol transceiver with switchable termination by Analog Devices was utilized and evaluated with the Analog Devices DC2364A evaluation board.  The LTC2873 is user configurable through GPIO pins for hardware interfacing with the microcontroller and can be programmed for RS-485 with full or half-duplex, RS-422, RS-232, and SDI-12 communication protocols.  The LTC2873 supports tri-state bi-directional single wire serial communication applications through the receiver enable (RE) and driver enable (DE) pins making it suitable for SDI-12 communication protocol.
 
 ![LTC2873 Block Diagram](images/LTC2873_Block_Diagram.png)
 
 When an SDI-12 command is issued, the microcontroller toggles the RE and DE pins to a logic high and the TX pin to a logic low for the start of the transmission break sequence. After the break sequence period (~12.5ms), the microcontroller toggles the TX pin to a logic high for the mark sequence period (~8.3ms), the SDI-12 command characters are transmitted to the device, and then the microcontroller toggles the RE and DE pins to a logic low while it waits to receive a response from the device.  There is a total of 7 GPIO pins needed for microcontroller and DC2364A evaluation board hardware interacing which are defined below.
 
 ```c
+/*
+
+ESP32-S3 GPIO Pin-Out Reference: https://randomnerdtutorials.com/esp32-pinout-reference-gpios/
+
+ESP32-S3 GPIO Summary:
+- ESP32-S3 GPIO Usable Pins: 04, 13, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33
+- ESP32-S3 UART 0 GPIO Pins: 01 (Tx), 03 (Rx)
+- ESP32-S3 UART 2 GPIO Pins: 17 (Tx), 16 (Rx)
+
+*/
+
 #define SDI12_MASTER_TXD_IO_NUM                     (GPIO_NUM_17) /*!< uart ttl transmit */
 #define SDI12_MASTER_RXD_IO_NUM                     (GPIO_NUM_16) /*!< uart ttl receive */
 #define SDI12_MASTER_RTS_IO_NUM                     (UART_PIN_NO_CHANGE)
@@ -48,6 +61,25 @@ SDI12_MASTER_DE_IO_NUM              ~3 (DE)
 SDI12_MASTER_RE_IO_NUM              4 (RE)
 SDI12_MASTER_TE_IO_NUM              ~6 (TE)
 SDI12_MASTER_MODE_IO_NUM            ~5 (MODE)
+```
+
+The SDI-12 component intializes the `sdi12_master_config_t` configuration structure by the calling the `SDI12_MASTER_CONFIG_DEFAULT` macro by default.  However, the SDI-12 component can be configured to user specific requirements by defining an `sdi12_master_config_t` configuration structure.
+
+```c
+/*
+ * SDI-12 Master configuration `sdi12_master_config_t` intialization macros
+*/
+
+#define SDI12_MASTER_CONFIG_DEFAULT {                                           \
+        .uart_port           = SDI12_MASTER_UART_PORT_NUM,                      \
+        .uart_tx_io_num      = SDI12_MASTER_TXD_IO_NUM,                         \
+        .uart_rx_io_num      = SDI12_MASTER_RXD_IO_NUM,                         \
+        .dc2364a_io_io_num   = SDI12_MASTER_IO_IO_NUM,                          \
+        .dc2364a_de_io_num   = SDI12_MASTER_DE_IO_NUM,                          \
+        .dc2364a_re_io_num   = SDI12_MASTER_RE_IO_NUM,                          \
+        .dc2364a_te_io_num   = SDI12_MASTER_TE_IO_NUM,                          \
+        .dc2364a_mode_io_num = SDI12_MASTER_MODE_IO_NUM }
+
 ```
 
 The DC2364A evaluation board was interfaced to the CR6 data-logger with the DC2364A's ground connected to `G` on the CR6 and `B/RI` of the DC2364A was connected to port `C3` on the CR6 for serial data.  The CR6, ESP32-S3, and Kingst LA1010 Logic Analizerand were connected t the laptop's USB ports for power and communication.
@@ -175,7 +207,7 @@ The `sdi12_master_recorder(sdi12_master_hdl, '0', SDI12_MASTER_M_COMMAND, &value
 
 ### SDI-12 ESP-IDF Component - Send Identification Example
 
-If you have an SDI-12 sensor and would like to know vendor and sensor information, the `sdi12_master_send_identification` function, that is available in the SDI-12 ESP-IDF component, can be used to retreive this information from the SDI-12 device.  A send identification command example is provided below.
+If you have an SDI-12 sensor and would like to know vendor and sensor information, the `sdi12_master_send_identification` function that is available in the SDI-12 ESP-IDF component, can be used to retreive these details from the SDI-12 device.  A send identification command example is provided below.
 
 ```c
 static void i2c_0_task( void *pvParameters ) {
@@ -219,7 +251,7 @@ static void i2c_0_task( void *pvParameters ) {
 }
 ```
 
-The `sdi12_master_send_identification(sdi12_master_hdl, '0', &sdi12_identification)` line passes the SDI-12 master handle, SDI-12 sensor address to the `sdi12_master_send_identification` function with reference to the returned sensor identification structure to be returned.  For information on supported sensor fields, reference the `sdi12_master_sensor_identification_t` structure type, in the SDI-12 ESP-IDF component.  If the `sdi12_master_send_identification` send identification transaction was successful, the function should return `ESP_OK`, and sensor information should be available in the reference variable.  In the above example, the referenced sensor information structure returned is printed to the serial port every 30-seconds.
+The `sdi12_master_send_identification(sdi12_master_hdl, '0', &sdi12_identification)` line passes the SDI-12 master handle and SDI-12 sensor address to the `sdi12_master_send_identification` function with reference to the returned sensor identification structure to be returned.  For information on supported sensor fields, reference the `sdi12_master_sensor_identification_t` structure type, in the SDI-12 ESP-IDF component.  If the `sdi12_master_send_identification` send identification transaction was successful, the function should return `ESP_OK`, and sensor information should be available in the reference variable.  In the above example, the referenced sensor information structure returned is printed to the serial port every 30-seconds.
 
 ## References & Resources
 

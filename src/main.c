@@ -60,27 +60,24 @@ static inline void vTaskDelaySecUntil(TickType_t *previousWakeTime, const uint s
 }
 
 static void i2c_0_task( void *pvParameters ) {
-    // initialize the xLastWakeTime variable with the current time.
     TickType_t xLastWakeTime = xTaskGetTickCount ();
-    //
+    
     sdi12_master_config_t sdi12_master_cfg = SDI12_MASTER_CONFIG_DEFAULT;
     sdi12_master_handle_t sdi12_master_hdl = NULL;
-    //
+    
     sdi12_master_init(&sdi12_master_cfg, &sdi12_master_hdl);
     if(sdi12_master_hdl == NULL) {
         //ESP_LOGE(APP_TAG, "sdi12_master_init failed: %s", esp_err_to_name(result));
         //esp_restart();
     }
-    //
 
-    //
     // task loop entry point
     for ( ;; ) {
         ESP_LOGI(APP_TAG, "######################## SDI-12 - START #########################");
-        //
+        
         // handle sensor
         float* values;
-        size_t size;
+        uint8_t size;
         esp_err_t result = sdi12_master_recorder(sdi12_master_hdl, '0', SDI12_MASTER_M_COMMAND, &values, &size);
         if(result != ESP_OK) {
             ESP_LOGE(APP_TAG, "sdi12_master_send_command failed (%s)", esp_err_to_name(result));
@@ -89,9 +86,9 @@ static void i2c_0_task( void *pvParameters ) {
                 ESP_LOGW(APP_TAG, "sdi-12 sensor response value: %f", values[i]);
             }
         }
-        //
+        
         vTaskDelay(pdMS_TO_TICKS(5000));
-        //
+        
         sdi12_master_sensor_identification_t sdi12_identification;
         result = sdi12_master_send_identification(sdi12_master_hdl, '0', &sdi12_identification);
         if(result != ESP_OK) {
@@ -103,15 +100,13 @@ static void i2c_0_task( void *pvParameters ) {
             ESP_LOGW(APP_TAG, "sensor version:        %s", sdi12_identification.sensor_version);
             ESP_LOGW(APP_TAG, "sensor information:    %s", sdi12_identification.sensor_information);
         }
-        //
-        //
+
         ESP_LOGI(APP_TAG, "######################## SDI-12 - END ###########################");
-        //
-        //
+
         // pause the task per defined wait period
         vTaskDelaySecUntil( &xLastWakeTime, 30 );
     }
-    //
+
     // free up task resources and remove task from stack
     vTaskDelete( NULL );
 }
