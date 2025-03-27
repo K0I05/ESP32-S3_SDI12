@@ -50,11 +50,14 @@
 #define SDI12_MASTER_UART_BAUD_RATE                 UINT16_C(1200)
 
 /* sdi-12 protocol timing definition */
-#define SDI12_MASTER_BREAK_DELAY_US                 UINT32_C(12500)
-#define SDI12_MASTER_MARK_DELAY_US                  UINT32_C(8333)
-#define SDI12_MASTER_MAX_RESPONSE_TIME_US           UINT32_C(15000)
-#define SDI12_MASTER_MAX_TOTAL_RESPONSE_TIME_US     UINT32_C(810000)
-#define SDI12_MASTER_DELAY_AFTER_TRANSMIT_US        UINT32_C(10000)
+#define SDI12_MASTER_BREAK_TIME_US                  UINT32_C(12500) /* break time of 12.5ms */
+#define SDI12_MASTER_MARK_TIME_US                   UINT32_C(8333)  /* mark time of 8.333-ms */
+#define SDI12_MASTER_MAX_RESPONSE_TIME_US           UINT32_C(16670) /* response time of 16.67-ms for 1st byte */
+#define SDI12_MASTER_MAX_TOTAL_RESPONSE_TIME_MS     UINT16_C(900)   /* total response time of 810-ms minimum */
+#define SDI12_MASTER_DELAY_AFTER_TRANSMIT_MS        UINT16_C(90)    /* delay of 90-ms after command transaction */
+#define SDI12_MASTER_RETRY_DELAY_MS                 UINT16_C(115)   /* delay of 115-ms before next retry */
+
+#define SDI12_MASTER_MAX_RETRY                      UINT8_C(3)
 
 #define SDI12_MASTER_POWERUP_DELAY_MS               UINT16_C(25)  /*!< */
 #define SDI12_MASTER_APPSTART_DELAY_MS              UINT16_C(25)
@@ -207,7 +210,7 @@ static inline esp_err_t sdi12_master_mark(sdi12_master_handle_t handle) {
 
     ESP_RETURN_ON_ERROR( gpio_set_level(handle->dev_config.uart_tx_io_num, SDI12_MASTER_GPIO_LEVEL_HI), TAG, "Unable to set tx gpio level high, mark failed" );
 
-    sdi12_master_delay(SDI12_MASTER_MARK_DELAY_US);
+    sdi12_master_delay(SDI12_MASTER_MARK_TIME_US);
 
     return ESP_OK;
 }
@@ -232,7 +235,7 @@ static inline esp_err_t sdi12_master_break(sdi12_master_handle_t handle) {
     ESP_RETURN_ON_ERROR( gpio_set_level(handle->dev_config.dc2364a_de_io_num, SDI12_MASTER_GPIO_LEVEL_HI), TAG, "Unable to set de gpio level high, break failed" );
     ESP_RETURN_ON_ERROR( gpio_set_level(handle->dev_config.dc2364a_re_io_num, SDI12_MASTER_GPIO_LEVEL_HI), TAG, "Unable to set re gpio level high, break failed" );
 
-    sdi12_master_delay(SDI12_MASTER_BREAK_DELAY_US);
+    sdi12_master_delay(SDI12_MASTER_BREAK_TIME_US);
 
     return ESP_OK;
 }
@@ -248,12 +251,12 @@ static inline esp_err_t sdi12_master_gpio_init(sdi12_master_handle_t handle) {
     ESP_ARG_CHECK( handle );
 
     /* mask bits for gpio pins */
-    uint64_t pin_bit_mask = ((1ULL << handle->dev_config.dc2364a_mode_io_num) | (1ULL << handle->dev_config.dc2364a_de_io_num) |
-                             (1ULL << handle->dev_config.dc2364a_re_io_num)   | (1ULL << handle->dev_config.dc2364a_te_io_num) |
-                             (1ULL << handle->dev_config.dc2364a_io_io_num)   | (1ULL << handle->dev_config.uart_tx_io_num));
+    const uint64_t pin_bit_mask = ((1ULL << handle->dev_config.dc2364a_mode_io_num) | (1ULL << handle->dev_config.dc2364a_de_io_num) |
+                                (1ULL << handle->dev_config.dc2364a_re_io_num)   | (1ULL << handle->dev_config.dc2364a_te_io_num) |
+                                (1ULL << handle->dev_config.dc2364a_io_io_num)   | (1ULL << handle->dev_config.uart_tx_io_num));
 
     /* set gpio configuration */
-    gpio_config_t io_conf = {
+    const gpio_config_t io_conf = {
         .intr_type    = GPIO_INTR_DISABLE,
         .mode         = GPIO_MODE_OUTPUT,
         .pin_bit_mask = pin_bit_mask,
@@ -282,11 +285,6 @@ static inline esp_err_t sdi12_master_uart_init(sdi12_master_handle_t handle) {
     /* validate arguments */
     ESP_ARG_CHECK( handle );
 
-    /* check if driver is installed */
-    if(uart_is_driver_installed(handle->dev_config.uart_port) == true) {
-        return ESP_OK;
-    }
-
     // sdi-12: init uart 1200bps, 7 bits, even parity, 1 stop bit
     uart_config_t uart_config = (uart_config_t) { 
         .baud_rate  = SDI12_MASTER_UART_BAUD_RATE,
@@ -307,7 +305,7 @@ static inline esp_err_t sdi12_master_uart_init(sdi12_master_handle_t handle) {
 
 /**
  * @brief Connects transmit pin to the UART peripheral output signal.  This function 
- * must be called to use the initialized UART.
+ * must be called to transmit serial data through the initialized UART.
  * 
  * @param handle SDI-12 master handle.
  * @return esp_err_t ESP_OK on success, ESP_ERR_INVALID_ARG if handle is NULL.
@@ -999,7 +997,7 @@ static inline bool sdi12_master_send_data_base_command_exists(const sdi12_master
  * 
  * @param[in] handle SDI-12 master handle.
  * @param[in] address SDI-12 sensor address.
- * @param[in] command SDI-12 measurement command to send and process.
+ * @param[in] command SDI-12 measurement base command to send and process.
  * @param[out] queue SDI-12 measurement queuing structure (data ready delay and number of values).
  * @return esp_err_t ESP_OK on success, ESP_ERR_INVALID_ARG if handle is NULL.
  */
@@ -1032,7 +1030,7 @@ static inline esp_err_t sdi12_master_queued_measurement(sdi12_master_handle_t ha
     ESP_RETURN_ON_ERROR(sdi12_master_send_command(handle, cmd, &response), TAG, "unable to send start measurement command, queued measurement failed");
 
     /* validate m command response size */
-    ESP_RETURN_ON_FALSE((strnlen(response, SDI12_MASTER_M_CMD_RESPONSE_MAX_SIZE) < SDI12_MASTER_M_CMD_RESPONSE_MAX_SIZE), ESP_ERR_INVALID_SIZE, TAG, "response length cannot exceed %u characters, queued measurement failed", SDI12_MASTER_M_CMD_RESPONSE_MAX_SIZE);
+    ESP_RETURN_ON_FALSE((strnlen(response, SDI12_MASTER_M_CMD_RESPONSE_MAX_SIZE) < SDI12_MASTER_M_CMD_RESPONSE_MAX_SIZE + 1), ESP_ERR_INVALID_SIZE, TAG, "response length cannot exceed %u characters, queued measurement failed", SDI12_MASTER_M_CMD_RESPONSE_MAX_SIZE);
 
     /* validate address */
     ESP_RETURN_ON_FALSE(((char)response[0] == address), ESP_ERR_INVALID_RESPONSE, TAG, "sdi-12 address returned is incorrect, queued measurement failed");
@@ -1078,16 +1076,16 @@ static inline esp_err_t sdi12_master_continuous_measurement(sdi12_master_handle_
  * ESP_ERR_INVALID_CRC when `crc` parameter is enabled.
  */
 static inline esp_err_t sdi12_master_parse_d_response(const sdi12_master_send_data_base_commands_t command, const char* response, bool crc, float **const values, uint8_t *const size) {
+    const uint8_t rsp_len  = strnlen(response, SDI12_MASTER_RESPONSE_MAX_SIZE);
     uint8_t rsp_char_index = 0;
     uint8_t tok_count      = 0;
-    uint8_t rsp_len        = strnlen(response, SDI12_MASTER_RESPONSE_MAX_SIZE);
     float*  out_values     = (float *)calloc(SDI12_MASTER_D_CMD_VALUES_MAX_SIZE, sizeof(float));
 
     /* validate send data command */
     ESP_RETURN_ON_FALSE( (sdi12_master_send_data_base_command_exists(command) == true), ESP_ERR_INVALID_ARG, TAG, "send data command is unknown and not supported by this function, parse d response failed");
 
     /* validate response size */
-    ESP_RETURN_ON_FALSE((strnlen(response, SDI12_MASTER_RESPONSE_MAX_SIZE) < SDI12_MASTER_RESPONSE_MAX_SIZE), ESP_ERR_INVALID_ARG, TAG, "response length cannot exceed %u characters, parse d response failed", SDI12_MASTER_RESPONSE_MAX_SIZE);
+    ESP_RETURN_ON_FALSE((strnlen(response, SDI12_MASTER_RESPONSE_MAX_SIZE) < SDI12_MASTER_RESPONSE_MAX_SIZE + 1), ESP_ERR_INVALID_ARG, TAG, "response length cannot exceed %u characters, parse d response failed", SDI12_MASTER_RESPONSE_MAX_SIZE);
 
     /* 
         iterate through each character in the response string 
@@ -1135,6 +1133,7 @@ static inline esp_err_t sdi12_master_queued_recorder(sdi12_master_handle_t handl
     uint8_t values_index    = 0;
     uint8_t values_counter  = 0;
     uint8_t send_data_index = 0;
+    bool abort = false;
     
     /* validate arguments */
     ESP_ARG_CHECK( handle && values && size );
@@ -1146,7 +1145,7 @@ static inline esp_err_t sdi12_master_queued_recorder(sdi12_master_handle_t handl
     ESP_RETURN_ON_FALSE( (sdi12_master_crc_required(command) == false), ESP_ERR_INVALID_ARG, TAG, "crc measurement commands are not supported at this time, queued recorder failed");
 
     /* determine measurement mode from measurement command */
-    sdi12_master_measurement_modes_t mode = sdi12_master_measurement_mode(command);
+    const sdi12_master_measurement_modes_t mode = sdi12_master_measurement_mode(command);
 
     /* validate measurement mode - continuous and continuous crc commands are not supported or handled by this function */
     ESP_RETURN_ON_FALSE( (mode != SDI12_MASTER_MODE_CONTINUOUS && mode != SDI12_MASTER_MODE_CONTINUOUS_CRC), ESP_ERR_INVALID_ARG, TAG, "continuous and continuous crc commands are not supported by this function, queued recorder failed");
@@ -1154,15 +1153,16 @@ static inline esp_err_t sdi12_master_queued_recorder(sdi12_master_handle_t handl
     /* send queued measurement command */
     ESP_RETURN_ON_ERROR(sdi12_master_queued_measurement(handle, address, command, &queue), TAG, "queued measurement command unsuccessful, queued recorder failed");
 
-    /* delay before requesting measurement values */
-    vTaskDelay(pdMS_TO_TICKS(queue.data_ready_delay * 1000));
+    /* delay before requesting measurement values - data ready delay is in seconds */
+    // sensor should send a service request (a<CR><LF>), maybe wait and listen
+    vTaskDelay(pdMS_TO_TICKS((queue.data_ready_delay * 1000) + 500));
 
     /* instantiate output values based on expected number of values */
     float* out_values = (float *)calloc(queue.number_of_values, sizeof(float));
     ESP_RETURN_ON_FALSE(out_values, ESP_ERR_NO_MEM, TAG, "no memory for measurement values, queued recorder failed");
 
     /* does the command require a crc check for the data send response */
-    bool crc = sdi12_master_crc_required(command);
+    const bool crc = sdi12_master_crc_required(command);
 
     /* 
         determine number of send data commands (D0..D9) required to collect 
@@ -1183,7 +1183,7 @@ static inline esp_err_t sdi12_master_queued_recorder(sdi12_master_handle_t handl
             retrieve send data command from send data command table 
             by data values index (D0..D9) and increment send data index
         */
-        sdi12_master_send_data_base_commands_t send_data_base_cmd = sdi12_master_send_data_command_table[send_data_index++];
+        const sdi12_master_send_data_base_commands_t send_data_base_cmd = sdi12_master_send_data_command_table[send_data_index++];
 
         /* build send data command from d command index (D0..D9) */
         const char* send_data_cmd = sdi12_master_send_data_command(address, send_data_base_cmd);
@@ -1195,6 +1195,7 @@ static inline esp_err_t sdi12_master_queued_recorder(sdi12_master_handle_t handl
         ESP_RETURN_ON_ERROR(sdi12_master_send_command(handle, send_data_cmd, &cmd_rsp), TAG, "send data command unsuccessful, queued recorder failed");
 
         /* validate send data command response for measurement abort (a<CR><LF>) - exit loop */
+        if(strnlen(cmd_rsp, SDI12_MASTER_RESPONSE_MAX_SIZE) < 3) abort = true;
 
         /* parse measurement values from d command response */
         ESP_RETURN_ON_ERROR(sdi12_master_parse_d_response(send_data_base_cmd, cmd_rsp, crc, &vals, &vals_size), TAG, "parse d response unsuccessful, queued recorder failed");
@@ -1212,7 +1213,10 @@ static inline esp_err_t sdi12_master_queued_recorder(sdi12_master_handle_t handl
         */
         values_counter = values_counter + vals_size;
 
-    } while (values_counter < queue.number_of_values);
+    } while (abort == false && values_counter < queue.number_of_values);
+
+    /* validate if the sensor aborted the measurement */
+    ESP_RETURN_ON_FALSE( (abort == false), ESP_ERR_INVALID_STATE, TAG, "sensor aborted measurement, queued recorder failed");
 
     /* set output parameters */
     *values = out_values;
@@ -1232,7 +1236,7 @@ static inline esp_err_t sdi12_master_continuous_recorder(sdi12_master_handle_t h
     ESP_RETURN_ON_FALSE( (sdi12_master_crc_required(command) == false), ESP_ERR_INVALID_ARG, TAG, "crc measurement commands are not supported at this time, continuous recorder failed");
 
     /* determine measurement mode from measurement command */
-    sdi12_master_measurement_modes_t mode = sdi12_master_measurement_mode(command);
+    const sdi12_master_measurement_modes_t mode = sdi12_master_measurement_mode(command);
 
     /* validate measurement mode - only continuous and continuous crc commands are supported by this function */
     ESP_RETURN_ON_FALSE( (mode == SDI12_MASTER_MODE_CONTINUOUS || mode == SDI12_MASTER_MODE_CONTINUOUS_CRC), ESP_ERR_NOT_SUPPORTED, TAG, "continuous commands (with and without crc) are supported by this function, continuous recorder failed");
@@ -1293,7 +1297,7 @@ esp_err_t sdi12_master_send_command(sdi12_master_handle_t handle, const char* co
     ESP_ARG_CHECK( handle && command && response );
 
     /* validate command size */
-    ESP_RETURN_ON_FALSE((strnlen(command, SDI12_MASTER_COMMAND_MAX_SIZE) < SDI12_MASTER_COMMAND_MAX_SIZE), ESP_ERR_INVALID_SIZE, TAG, "command length cannot exceed %u characters, send command failed", SDI12_MASTER_COMMAND_MAX_SIZE);
+    ESP_RETURN_ON_FALSE((strnlen(command, SDI12_MASTER_COMMAND_MAX_SIZE) < SDI12_MASTER_COMMAND_MAX_SIZE + 1), ESP_ERR_INVALID_SIZE, TAG, "command length cannot exceed %u characters, send command failed", SDI12_MASTER_COMMAND_MAX_SIZE);
 
     /* attempt to disconnect uart tx pin - uart tx pin is now configured as a gpio */
     ESP_RETURN_ON_ERROR( sdi12_master_uart_disconnect_tx(handle), TAG, "unable to disconnect uart tx pin, send command failed");
@@ -1307,59 +1311,61 @@ esp_err_t sdi12_master_send_command(sdi12_master_handle_t handle, const char* co
     /* attempt to connect uart tx pin - uart tx pin is now configured to transmit serial data */
     ESP_RETURN_ON_ERROR( sdi12_master_uart_connect_tx(handle), TAG, "unable to connect uart tx pin, send command failed");
 
-    /* send command */
+    /* iterate through each byte in command and transmit */
     for(int i = 0; i < strnlen(command, SDI12_MASTER_COMMAND_MAX_SIZE); i++) {
         uart_write_bytes(handle->dev_config.uart_port, &command[i], 1);
     }
 
-    // command transaction delay (byte time * command length)
-    sdi12_master_delay( (SDI12_MASTER_MARK_DELAY_US * strnlen(command, SDI12_MASTER_COMMAND_MAX_SIZE)) );
+    /* command transaction delay (byte time * command length) */
+    sdi12_master_delay( (SDI12_MASTER_MARK_TIME_US * strnlen(command, SDI12_MASTER_COMMAND_MAX_SIZE)) );
 
-    // set de and re direction to read
-    ESP_RETURN_ON_ERROR( gpio_set_level(handle->dev_config.dc2364a_de_io_num, 0), TAG, "unable to set de gpio level, send command failed" );
-    ESP_RETURN_ON_ERROR( gpio_set_level(handle->dev_config.dc2364a_re_io_num, 0), TAG, "unable to set re gpio level, send command failed" );
+    /* set de and re direction to read - gpio level low */
+    ESP_RETURN_ON_ERROR( gpio_set_level(handle->dev_config.dc2364a_de_io_num, SDI12_MASTER_GPIO_LEVEL_LO), TAG, "unable to set de gpio level low, send command failed" );
+    ESP_RETURN_ON_ERROR( gpio_set_level(handle->dev_config.dc2364a_re_io_num, SDI12_MASTER_GPIO_LEVEL_LO), TAG, "unable to set re gpio level low, send command failed" );
 
-    // init end time and end command flag, sensor must complete 
-    // the transmission within 810-ms (total response time)
-    int64_t end_time    = esp_timer_get_time() + (int64_t)SDI12_MASTER_MAX_TOTAL_RESPONSE_TIME_US;
-    bool    end_command = false;
+    // init end time and end command flag, sensor must complete the 
+    // transmission within 810-ms (total response time) for D commands
+    const int64_t end_time = esp_timer_get_time() + (int64_t)SDI12_MASTER_MAX_RESPONSE_TIME_US + ((int64_t)SDI12_MASTER_MAX_TOTAL_RESPONSE_TIME_MS * 1000);
+    bool       end_command = false;
 
-    // configure temporary buffers for the output response and incoming data from uart
+    /* configure temporary buffers for the output response and incoming data from uart */
     char* out_response = (char *)calloc(SDI12_MASTER_RESPONSE_MAX_SIZE, sizeof(char));
     //uint8_t* rx_buffer = (uint8_t *)calloc(SDI12_MASTER_RESPONSE_MAX_SIZE, sizeof(uint8_t));
     uint8_t rx_buffer[SDI12_MASTER_RESPONSE_MAX_SIZE] = { 0 };
     
-    // poll for sensor response otherwise a timeout will be raised
-    while ((esp_timer_get_time() < end_time) && (end_command == false)) {
+    /* poll for sensor response otherwise a timeout will be raised */
+    do {
         // read uart bytes and concat response string
-        uint8_t rx_read_len = uart_read_bytes(handle->dev_config.uart_port, &rx_buffer, SDI12_MASTER_RESPONSE_MAX_SIZE, 100 / portTICK_PERIOD_MS);
-        
+        const uint8_t rx_read_len = uart_read_bytes(handle->dev_config.uart_port, &rx_buffer, SDI12_MASTER_RESPONSE_MAX_SIZE, 100 / portTICK_PERIOD_MS);
         // iterate one byte at a time and remove <CR><LF> chars
         if(rx_read_len > 0) {
-            uint8_t response_index = 0;
+            uint8_t rsp_index = 0;
             for(uint8_t i = 0; i < rx_read_len; i++) {
-                char c = (char)rx_buffer[i];
+                const char c = (char)rx_buffer[i];
                 // concat response without <CR> or <LF> characters
                 if(c != SDI12_MASTER_CHR_CR || c != SDI12_MASTER_CHR_LF) {
-                    out_response[response_index++] = c;
+                    out_response[rsp_index++] = c;
                 }
                 // validate end of response <CR> character
                 if(c == SDI12_MASTER_CHR_CR) {
-                    out_response[response_index++] = SDI12_MASTER_CHR_NUL;
+                    out_response[rsp_index++] = SDI12_MASTER_CHR_NUL;
                     end_command = true;
                 }
             }
         }
-    }
+    } while ((esp_timer_get_time() < end_time) && (end_command == false));
+
+    /* attempt to flush uart receive buffer */
+    ESP_RETURN_ON_ERROR( uart_flush_input(handle->dev_config.uart_port), TAG, "unable to flush uart input buffer, send command failed");
 
     /* attempt to disconnect uart tx pin - uart tx pin is now configured as a gpio */
     ESP_RETURN_ON_ERROR( sdi12_master_uart_disconnect_tx(handle), TAG, "unable to disconnect uart tx pin, send command failed");
 
     /* validate sensor responded within the max total response time */
-    ESP_RETURN_ON_FALSE(end_command, ESP_ERR_TIMEOUT, TAG, "response timed out, send command failed");
+    ESP_RETURN_ON_FALSE(end_command, ESP_ERR_TIMEOUT, TAG, "response timed out (command: %s), send command failed", command);
 
     /* delay a little before next command */
-    vTaskDelay(pdMS_TO_TICKS(SDI12_MASTER_DELAY_AFTER_TRANSMIT_US / 1000));
+    vTaskDelay(pdMS_TO_TICKS(SDI12_MASTER_DELAY_AFTER_TRANSMIT_MS));
 
     /* set output parameters */
     *response = out_response;
@@ -1389,7 +1395,11 @@ esp_err_t sdi12_master_recorder(sdi12_master_handle_t handle, const char address
     */
 
     /* determine measurement mode from measurement command */
-    sdi12_master_measurement_modes_t mode = sdi12_master_measurement_mode(command);
+    const sdi12_master_measurement_modes_t mode = sdi12_master_measurement_mode(command);
+
+    /* retry */
+    uint8_t retry_count = 0;
+    esp_err_t rtn = ESP_OK;
 
     /* handle measurement command by measurement mode */
     switch(mode) {
@@ -1397,7 +1407,21 @@ esp_err_t sdi12_master_recorder(sdi12_master_handle_t handle, const char address
         case SDI12_MASTER_MODE_QUEUED_CRC:
         case SDI12_MASTER_MODE_CONCURRENT:
         case SDI12_MASTER_MODE_CONCURRENT_CRC:
-            ESP_RETURN_ON_ERROR( sdi12_master_queued_recorder(handle, address, command, values, size), TAG, "queued recorder unsuccessful, recorder failed");
+            //ESP_RETURN_ON_ERROR( sdi12_master_queued_recorder(handle, address, command, values, size), TAG, "queued recorder unsuccessful, recorder failed");
+            do {
+                /* attempt queued recorder */
+                rtn = sdi12_master_queued_recorder(handle, address, command, values, size);
+
+                /* sleep */
+                if(rtn != ESP_OK) {
+                    /* delay before next retry */
+                    vTaskDelay(pdMS_TO_TICKS(SDI12_MASTER_RETRY_DELAY_MS));
+
+                    /* increment retry counter */
+                    retry_count++;
+                }
+            } while (rtn != ESP_OK && retry_count < SDI12_MASTER_MAX_RETRY);
+            ESP_RETURN_ON_ERROR( rtn, TAG, "queued recorder unsuccessful after %u retries, recorder failed", SDI12_MASTER_MAX_RETRY);
             break;
         case SDI12_MASTER_MODE_CONTINUOUS:
         case SDI12_MASTER_MODE_CONTINUOUS_CRC:
@@ -1423,7 +1447,7 @@ esp_err_t sdi12_master_acknowledge_active(sdi12_master_handle_t handle, const ch
     ESP_RETURN_ON_ERROR(sdi12_master_send_command(handle, command, &response), TAG, "acknowledge active command failed");
 
     /* validate response `a` and size */
-    ESP_RETURN_ON_FALSE((strnlen(response, SDI12_MASTER_AK_CMD_RESPONSE_MAX_SIZE) < SDI12_MASTER_AK_CMD_RESPONSE_MAX_SIZE), ESP_ERR_INVALID_SIZE, TAG, "response length cannot exceed %u characters, acknowledge active command failed", SDI12_MASTER_AK_CMD_RESPONSE_MAX_SIZE);
+    ESP_RETURN_ON_FALSE((strnlen(response, SDI12_MASTER_AK_CMD_RESPONSE_MAX_SIZE) < SDI12_MASTER_AK_CMD_RESPONSE_MAX_SIZE + 1), ESP_ERR_INVALID_SIZE, TAG, "response length cannot exceed %u characters, acknowledge active command failed", SDI12_MASTER_AK_CMD_RESPONSE_MAX_SIZE);
 
     /* set output parameter */
     if((char)response[0] == address) {
@@ -1448,50 +1472,51 @@ esp_err_t sdi12_master_send_identification(sdi12_master_handle_t handle, const c
     ESP_RETURN_ON_ERROR(sdi12_master_send_command(handle, command, &response), TAG, "send identification command failed");
 
     /* validate response `allccccccccmmmmmmvvvxxx...xx` and size */
-    ESP_RETURN_ON_FALSE((strnlen(response, SDI12_MASTER_I_CMD_RESPONSE_MAX_SIZE) < SDI12_MASTER_I_CMD_RESPONSE_MAX_SIZE), ESP_ERR_INVALID_SIZE, TAG, "response length cannot exceed %u characters, send identification command failed", SDI12_MASTER_I_CMD_RESPONSE_MAX_SIZE);
+    ESP_RETURN_ON_FALSE((strnlen(response, SDI12_MASTER_I_CMD_RESPONSE_MAX_SIZE) < SDI12_MASTER_I_CMD_RESPONSE_MAX_SIZE + 1), ESP_ERR_INVALID_SIZE, TAG, "response length cannot exceed %u characters, send identification command failed", SDI12_MASTER_I_CMD_RESPONSE_MAX_SIZE);
 
     /* validate address */
     ESP_RETURN_ON_FALSE(((char)response[0] == address), ESP_ERR_INVALID_RESPONSE, TAG, "sdi-12 address is incorrect, send identification command failed");
 
-    /* parse information */
-    sdi12_master_sensor_identification_t out_ident;
-    out_ident.sdi12_version[0]         = (char)response[1];
-    out_ident.sdi12_version[1]         = SDI12_MASTER_CHR_PRD;
-    out_ident.sdi12_version[2]         = (char)response[2];
-    out_ident.sdi12_version[3]         = SDI12_MASTER_CHR_NUL;
-    out_ident.vendor_identification[0] = (char)response[3];
-    out_ident.vendor_identification[1] = (char)response[4];
-    out_ident.vendor_identification[2] = (char)response[5];
-    out_ident.vendor_identification[3] = (char)response[6];
-    out_ident.vendor_identification[4] = (char)response[7];
-    out_ident.vendor_identification[5] = (char)response[8];
-    out_ident.vendor_identification[6] = (char)response[9];
-    out_ident.vendor_identification[7] = (char)response[10];
-    out_ident.vendor_identification[8] = SDI12_MASTER_CHR_NUL;
-    out_ident.sensor_model[0]          = (char)response[11];
-    out_ident.sensor_model[1]          = (char)response[12];
-    out_ident.sensor_model[2]          = (char)response[13];
-    out_ident.sensor_model[3]          = (char)response[14];
-    out_ident.sensor_model[4]          = (char)response[15];
-    out_ident.sensor_model[5]          = SDI12_MASTER_CHR_NUL;
-    out_ident.sensor_version[0]        = (char)response[16];
-    out_ident.sensor_version[1]        = (char)response[17];
-    out_ident.sensor_version[2]        = (char)response[18];
-    out_ident.sensor_version[3]        = SDI12_MASTER_CHR_NUL;
-    out_ident.sensor_information[0]    = (char)response[19];
-    out_ident.sensor_information[1]    = (char)response[20];
-    out_ident.sensor_information[2]    = (char)response[21];
-    out_ident.sensor_information[3]    = (char)response[22];
-    out_ident.sensor_information[4]    = (char)response[23];
-    out_ident.sensor_information[5]    = (char)response[24];
-    out_ident.sensor_information[6]    = (char)response[25];
-    out_ident.sensor_information[7]    = (char)response[26];
-    out_ident.sensor_information[8]    = (char)response[27];
-    out_ident.sensor_information[9]    = (char)response[28];
-    out_ident.sensor_information[10]   = (char)response[29];
-    out_ident.sensor_information[11]   = (char)response[30];
-    out_ident.sensor_information[12]   = (char)response[31];
-    out_ident.sensor_information[13]   = SDI12_MASTER_CHR_NUL;
+    /* parse information and init sensor identification structure */
+    const sdi12_master_sensor_identification_t out_ident = {
+        .sdi12_version[0]         = (char)response[1],
+        .sdi12_version[1]         = SDI12_MASTER_CHR_PRD,
+        .sdi12_version[2]         = (char)response[2],
+        .sdi12_version[3]         = SDI12_MASTER_CHR_NUL,
+        .vendor_identification[0] = (char)response[3],
+        .vendor_identification[1] = (char)response[4],
+        .vendor_identification[2] = (char)response[5],
+        .vendor_identification[3] = (char)response[6],
+        .vendor_identification[4] = (char)response[7],
+        .vendor_identification[5] = (char)response[8],
+        .vendor_identification[6] = (char)response[9],
+        .vendor_identification[7] = (char)response[10],
+        .vendor_identification[8] = SDI12_MASTER_CHR_NUL,
+        .sensor_model[0]          = (char)response[11],
+        .sensor_model[1]          = (char)response[12],
+        .sensor_model[2]          = (char)response[13],
+        .sensor_model[3]          = (char)response[14],
+        .sensor_model[4]          = (char)response[15],
+        .sensor_model[5]          = SDI12_MASTER_CHR_NUL,
+        .sensor_version[0]        = (char)response[16],
+        .sensor_version[1]        = (char)response[17],
+        .sensor_version[2]        = (char)response[18],
+        .sensor_version[3]        = SDI12_MASTER_CHR_NUL,
+        .sensor_information[0]    = (char)response[19],
+        .sensor_information[1]    = (char)response[20],
+        .sensor_information[2]    = (char)response[21],
+        .sensor_information[3]    = (char)response[22],
+        .sensor_information[4]    = (char)response[23],
+        .sensor_information[5]    = (char)response[24],
+        .sensor_information[6]    = (char)response[25],
+        .sensor_information[7]    = (char)response[26],
+        .sensor_information[8]    = (char)response[27],
+        .sensor_information[9]    = (char)response[28],
+        .sensor_information[10]   = (char)response[29],
+        .sensor_information[11]   = (char)response[30],
+        .sensor_information[12]   = (char)response[31],
+        .sensor_information[13]   = SDI12_MASTER_CHR_NUL,
+    };
 
     /* set output parameter */
     *identification = out_ident;
@@ -1512,7 +1537,7 @@ esp_err_t sdi12_master_change_address(sdi12_master_handle_t handle, const char a
     ESP_RETURN_ON_ERROR(sdi12_master_send_command(handle, command, &response), TAG, "change address command failed");
 
     /* validate response `b` and size */
-    ESP_RETURN_ON_FALSE((strnlen(response, SDI12_MASTER_A_CMD_RESPONSE_MAX_SIZE) < SDI12_MASTER_A_CMD_RESPONSE_MAX_SIZE), ESP_ERR_INVALID_SIZE, TAG, "response length cannot exceed %u characters, change address command failed", SDI12_MASTER_A_CMD_RESPONSE_MAX_SIZE);
+    ESP_RETURN_ON_FALSE((strnlen(response, SDI12_MASTER_A_CMD_RESPONSE_MAX_SIZE) < SDI12_MASTER_A_CMD_RESPONSE_MAX_SIZE + 1), ESP_ERR_INVALID_SIZE, TAG, "response length cannot exceed %u characters, change address command failed", SDI12_MASTER_A_CMD_RESPONSE_MAX_SIZE);
 
     /* validate address */
     ESP_RETURN_ON_FALSE(((char)response[0] == new_address), ESP_ERR_INVALID_RESPONSE, TAG, "sdi-12 address does not match new address, change address command failed");
@@ -1530,13 +1555,13 @@ esp_err_t sdi12_master_address_query(sdi12_master_handle_t handle, char *const a
     const char command[] = { SDI12_MASTER_CHR_QUMK, SDI12_MASTER_CHR_EXMK, SDI12_MASTER_CHR_NUL };
 
     // address query command response status code
-    esp_err_t ret = sdi12_master_send_command(handle, command, &response);
+    const esp_err_t ret = sdi12_master_send_command(handle, command, &response);
     if(ret != ESP_OK) {
         ESP_RETURN_ON_ERROR(ret, TAG, "no response from address query, address query command failed");
     }
     
     /* validate response `a` and size */
-    ESP_RETURN_ON_FALSE((strnlen(response, SDI12_MASTER_Q_CMD_RESPONSE_MAX_SIZE) < SDI12_MASTER_Q_CMD_RESPONSE_MAX_SIZE), ESP_ERR_INVALID_SIZE, TAG, "response length cannot exceed %u characters, address query command failed", SDI12_MASTER_Q_CMD_RESPONSE_MAX_SIZE);
+    ESP_RETURN_ON_FALSE((strnlen(response, SDI12_MASTER_Q_CMD_RESPONSE_MAX_SIZE) < SDI12_MASTER_Q_CMD_RESPONSE_MAX_SIZE + 1), ESP_ERR_INVALID_SIZE, TAG, "response length cannot exceed %u characters, address query command failed", SDI12_MASTER_Q_CMD_RESPONSE_MAX_SIZE);
 
     /* set output parameter */
     *address = (char)response[0];

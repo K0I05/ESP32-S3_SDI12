@@ -58,19 +58,20 @@ ESP32-S3 GPIO Summary:
 - ESP32-S3 UART 0 GPIO Pins: 01 (Tx), 03 (Rx)
 - ESP32-S3 UART 2 GPIO Pins: 17 (Tx), 16 (Rx)
 
+Analog Devices DC2363 evaluation board with LTC2875 RS-232/RS-485/RS-422 chipset:
+- DE & RE pins could be tied together for SDI-12 applications
+
 */
 
-#define SDI12_MASTER_UART_RX_BUFFER_SIZE            (1024)        /*!< uart receive maximum buffer size */
-#define SDI12_MASTER_UART_PORT_NUM                  (UART_NUM_2)  /*!< uart port number */
-#define SDI12_MASTER_TXD_IO_NUM                     (GPIO_NUM_17) /*!< uart ttl transmit */
-#define SDI12_MASTER_RXD_IO_NUM                     (GPIO_NUM_16) /*!< uart ttl receive */
-#define SDI12_MASTER_RTS_IO_NUM                     (UART_PIN_NO_CHANGE)
-#define SDI12_MASTER_CTS_IO_NUM                     (UART_PIN_NO_CHANGE)
-#define SDI12_MASTER_IO_IO_NUM                      (GPIO_NUM_4)  /*!< logic supply ref voltage (dev board logic supply) */
-#define SDI12_MASTER_DE_IO_NUM                      (GPIO_NUM_13) /*!< in rs485 mode a logic low disables rs-485 driver and high enables driver, in rs 232 a logic high enables fast mode (1Mbps) and low enables slow mode (250kbps) */
-#define SDI12_MASTER_RE_IO_NUM                      (GPIO_NUM_18) /*!< logic high disables the rs485 receiver and low enables the receiver */
-#define SDI12_MASTER_TE_IO_NUM                      (GPIO_NUM_19) /*!< logic low for 120-ohm termination or high for unterminated */
-#define SDI12_MASTER_MODE_IO_NUM                    (GPIO_NUM_21) /*!< logic low for rs-232 and high for rs-485 */
+#define SDI12_MASTER_UART_RX_BUFFER_SIZE        (512)        /*!< uart receive maximum buffer size */
+#define SDI12_MASTER_UART_PORT_NUM              (UART_NUM_2)  /*!< uart port number */
+#define SDI12_MASTER_TXD_IO_NUM                 (GPIO_NUM_17) /*!< uart ttl transmit */
+#define SDI12_MASTER_RXD_IO_NUM                 (GPIO_NUM_16) /*!< uart ttl receive */
+#define SDI12_MASTER_IO_IO_NUM                  (GPIO_NUM_4)  /*!< logic supply ref voltage (dev board logic supply) */
+#define SDI12_MASTER_DE_IO_NUM                  (GPIO_NUM_13) /*!< in rs485 mode a logic low disables rs-485 driver and high enables driver, in rs 232 a logic high enables fast mode (1Mbps) and low enables slow mode (250kbps) */
+#define SDI12_MASTER_RE_IO_NUM                  (GPIO_NUM_18) /*!< logic high disables the rs485 receiver and low enables the receiver */
+#define SDI12_MASTER_TE_IO_NUM                  (GPIO_NUM_19) /*!< logic low for 120-ohm termination or high for unterminated */
+#define SDI12_MASTER_MODE_IO_NUM                (GPIO_NUM_21) /*!< logic low for rs-232 and high for rs-485 */
 
 
 
@@ -78,11 +79,11 @@ ESP32-S3 GPIO Summary:
  * Send identification command aI! maximum number of characters for
  * sensor identification structure fields
  */
-#define SDI12_MASTER_I_SENSOR_VER_MAX_SIZE 4        /*!< sensor identification structure, sdi-12 version number, version 1.4 is encoded as 14 (3-char + `\0` char) */
-#define SDI12_MASTER_I_VENDOR_IDENT_MAX_SIZE 9      /*!< sensor identification structure, vendor identification (8-char + `\0` char) */
-#define SDI12_MASTER_I_SENSOR_MODEL_MAX_SIZE 7      /*!< sensor identification structure, sensor model number (6-char + `\0` char) */
-#define SDI12_MASTER_I_SENSOR_VER_MAX_SIZE 4        /*!< sensor identification structure, sensor version number (3-char + `\0` char) */
-#define SDI12_MASTER_I_SENSOR_INFO_MAX_SIZE 14      /*!< sensor identification structure, sensor information (13-char + `\0` char) i.e. serial number, other */
+#define SDI12_MASTER_I_SENSOR_VER_MAX_SIZE      UINT8_C(4)  /*!< sensor identification structure, sdi-12 version number, version 1.4 is encoded as 14 (3-char + `\0` char) */
+#define SDI12_MASTER_I_VENDOR_IDENT_MAX_SIZE    UINT8_C(9)  /*!< sensor identification structure, vendor identification (8-char + `\0` char) */
+#define SDI12_MASTER_I_SENSOR_MODEL_MAX_SIZE    UINT8_C(7)  /*!< sensor identification structure, sensor model number (6-char + `\0` char) */
+#define SDI12_MASTER_I_SENSOR_VER_MAX_SIZE      UINT8_C(4)  /*!< sensor identification structure, sensor version number (3-char + `\0` char) */
+#define SDI12_MASTER_I_SENSOR_INFO_MAX_SIZE     UINT8_C(14) /*!< sensor identification structure, sensor information (13-char + `\0` char) i.e. serial number, other */
 
 
 /*
@@ -246,9 +247,9 @@ typedef struct sdi12_master_measurement_queue_s {
  */
 typedef struct sdi12_master_config_s {
     uint16_t   uart_port;               /*!< uart port number */
-    gpio_num_t uart_tx_io_num;          /*!< uart tx pin */
-    gpio_num_t uart_rx_io_num;          /*!< uart rx pin */
-    gpio_num_t dc2364a_io_io_num;       /*!< logic supply ref voltage (dev board logic supply) */
+    gpio_num_t uart_tx_io_num;          /*!< uart transmit pin */
+    gpio_num_t uart_rx_io_num;          /*!< uart receive pin */
+    gpio_num_t dc2364a_io_io_num;       /*!< logic supply io ref voltage (dev board logic supply) */
     gpio_num_t dc2364a_de_io_num;       /*!< in rs485 mode a logic low disables rs-485 driver and high enables driver, in rs 232 a logic high enables fast mode (1Mbps) and low enables slow mode (250kbps) */
     gpio_num_t dc2364a_re_io_num;       /*!< logic high disables the rs485 receiver and low enables the receiver */
     gpio_num_t dc2364a_te_io_num;       /*!< logic low for 120-ohm termination or high for unterminated */
@@ -319,8 +320,8 @@ esp_err_t sdi12_master_send_command(sdi12_master_handle_t handle, const char* co
  * @param[in] handle SDI-12 master handle.
  * @param[in] address SDI-12 sensor address.
  * @param[in] command SDI-12 measurement based command.
- * @param[out] values Array of values parsed from the SDI-12 data send response.
- * @param[out] size Number of values parsed from the SDI-12 data send response.
+ * @param[out] values Array of measurement values parsed from the SDI-12 data send response.
+ * @param[out] size Number of measurement values parsed from the SDI-12 data send response.
  * @return esp_err_t ESP_OK on success, ESP_ERR_INVALID_ARG if handle is NULL.
  */
 esp_err_t sdi12_master_recorder(sdi12_master_handle_t handle, const char address, const sdi12_master_measurement_base_commands_t command, float **const values, uint8_t *const size);

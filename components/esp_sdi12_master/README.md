@@ -163,7 +163,7 @@ A common command utilized with an SDI-12 sensor is the start measurement command
 This entire process is automated by using the `sdi12_master_recorder` function that is available in the SDI-12 ESP-IDF component.  A measurement command example is provided below.
 
 ```c
-static void i2c_0_task( void *pvParameters ) {
+static void sdi12_0_task( void *pvParameters ) {
     TickType_t xLastWakeTime = xTaskGetTickCount ();
     
     sdi12_master_config_t sdi12_master_cfg = SDI12_MASTER_CONFIG_DEFAULT;
@@ -210,7 +210,7 @@ The `sdi12_master_recorder(sdi12_master_hdl, '0', SDI12_MASTER_M_COMMAND, &value
 If you have an SDI-12 sensor and would like to know vendor and sensor information, the `sdi12_master_send_identification` function that is available in the SDI-12 ESP-IDF component, can be used to retreive these details from the SDI-12 device.  A send identification command example is provided below.
 
 ```c
-static void i2c_0_task( void *pvParameters ) {
+static void sdi12_0_task( void *pvParameters ) {
     TickType_t xLastWakeTime = xTaskGetTickCount ();
     
     sdi12_master_config_t sdi12_master_cfg = SDI12_MASTER_CONFIG_DEFAULT;
