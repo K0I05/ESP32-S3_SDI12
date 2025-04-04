@@ -1329,9 +1329,12 @@ esp_err_t sdi12_master_send_command(sdi12_master_handle_t handle, const char* co
     bool       end_command = false;
 
     /* configure temporary buffers for the output response and incoming data from uart */
-    char* out_response = (char *)calloc(SDI12_MASTER_RESPONSE_MAX_SIZE, sizeof(char));
-    //uint8_t* rx_buffer = (uint8_t *)calloc(SDI12_MASTER_RESPONSE_MAX_SIZE, sizeof(uint8_t));
-    uint8_t rx_buffer[SDI12_MASTER_RESPONSE_MAX_SIZE] = { 0 };
+    char*   out_response = (char *)calloc(SDI12_MASTER_RESPONSE_MAX_SIZE, sizeof(char));
+    uint8_t* rx_buffer    = (uint8_t *)calloc(SDI12_MASTER_RESPONSE_MAX_SIZE, sizeof(uint8_t));
+    //uint8_t rx_buffer[SDI12_MASTER_RESPONSE_MAX_SIZE] = { 0 };
+
+    /* validate memory allocation */
+    ESP_RETURN_ON_FALSE( (out_response != NULL || rx_buffer != NULL), ESP_ERR_NO_MEM, TAG, "no memory for serial buffer or response, send command failed");
     
     /* poll for sensor response otherwise a timeout will be raised */
     do {
@@ -1341,7 +1344,7 @@ esp_err_t sdi12_master_send_command(sdi12_master_handle_t handle, const char* co
         if(rx_read_len > 0) {
             uint8_t rsp_index = 0;
             for(uint8_t i = 0; i < rx_read_len; i++) {
-                const char c = (char)rx_buffer[i];
+                const char c = (const char)rx_buffer[i];
                 // concat response without <CR> or <LF> characters
                 if(c != SDI12_MASTER_CHR_CR || c != SDI12_MASTER_CHR_LF) {
                     out_response[rsp_index++] = c;

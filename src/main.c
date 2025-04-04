@@ -262,10 +262,10 @@ static void sdi12_0_task( void *pvParameters ) {
     for ( ;; ) {
         ESP_LOGI(APP_TAG, "######################## SDI-12 - START #########################");
 
-        sdi12_x_hy_wdc6se( sdi12_master_hdl, show_info, true );
+        //sdi12_x_hy_wdc6se( sdi12_master_hdl, show_info, true );
         show_info = false;
 
-        //sdi12_0_cr6( sdi12_master_hdl );
+        sdi12_0_cr6( sdi12_master_hdl );
 
         ESP_LOGI(APP_TAG, "######################## SDI-12 - END ###########################");
 

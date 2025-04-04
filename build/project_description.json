@@ -1,7 +1,7 @@
 {
     "version":            "1.1",
     "project_name":       "ESP32-S3_SDI12_20241231",
-    "project_version":    "1",
+    "project_version":    "2d75f44-dirty",
     "project_path":       "C:/Users/lavco/OneDrive/Documents/PlatformIO/Projects/ESP32-S3_SDI12_20241231",
     "idf_path":           "C:/Users/lavco/esp/v5.4/esp-idf",
     "build_dir":          "C:/Users/lavco/OneDrive/Documents/PlatformIO/Projects/ESP32-S3_SDI12_20241231/build",
